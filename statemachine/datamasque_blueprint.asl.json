@@ -1,0 +1,89 @@
+{
+  "Comment": "A blueprint to automate the creation of masked snapshots for a specific RDS DB instance.",
+  "StartAt": "Describe DB Snapshots",
+  "States": {
+    "Describe DB Snapshots": {
+      "Type": "Task",
+      "Resource": "${DescribeDBSnapshotFunctionArn}",
+      "Next": "Describe DB Instances"
+    },
+    "Describe DB Instances": {
+      "Type": "Task",
+      "Resource": "${DescribeDBInstancesFunctionArn}",
+      "Next": "Restore DB from Snapshot"
+    },
+    "Restore DB from Snapshot": {
+      "Type": "Task",
+      "Resource": "${RestoreDBInstanceFromSnapshotFunctionArn}",
+      "Next": "Wait for DB Instance",
+      "OutputPath": "$.DBInstance"
+    },
+    "Wait for DB Instance": {
+      "Type": "Wait",
+      "Seconds": 900,
+      "Next": "Datamasque API run"
+    },
+    "Datamasque API run": {
+      "Type": "Task",
+      "Resource": "${DatamasqueRunFunctionArn}",
+      "Next": "SQS SendMessage",
+      "Catch": [
+        {
+          "ErrorEquals": [
+            "States.TaskFailed"
+          ],
+          "Next": "DeleteDBInstance",
+          "ResultPath": "$.TaskResult"
+        }
+      ]
+    },
+    "SQS SendMessage": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::sqs:sendMessage.waitForTaskToken",
+      "Parameters": {
+        "QueueUrl": "${DatamasqueBlueprintSQSQueue}",
+        "MessageBody": {
+          "input.$": "$",
+          "taskToken.$": "$$.Task.Token"
+        }
+      },
+      "Next": "CreateDBSnapshot",
+      "Catch": [
+        {
+          "ErrorEquals": [
+            "States.TaskFailed"
+          ],
+          "Next": "DeleteDBInstance",
+          "ResultPath": "$.TaskResult"
+        }
+      ]
+    },
+    "CreateDBSnapshot": {
+      "Type": "Task",
+      "Parameters": {
+        "DbInstanceIdentifier.$": "$.DBInstanceIdentifier",
+        "DbSnapshotIdentifier.$": "States.Format('{}-{}',$.DBInstanceIdentifier, $.Timestamp)"
+      },
+      "Resource": "arn:aws:states:::aws-sdk:rds:createDBSnapshot",
+      "Next": "DeleteDBInstance",
+      "Catch": [
+        {
+          "ErrorEquals": [
+            "States.TaskFailed"
+          ],
+          "Next": "DeleteDBInstance",
+          "ResultPath": "$.TaskResult"
+        }
+      ]
+    },
+    "DeleteDBInstance": {
+      "Type": "Task",
+      "End": true,
+      "Parameters": {
+        "DbInstanceIdentifier.$": "$.DBInstanceIdentifier",
+        "SkipFinalSnapshot": true
+      },
+      "Resource": "arn:aws:states:::aws-sdk:rds:deleteDBInstance"
+    }
+  }
+}

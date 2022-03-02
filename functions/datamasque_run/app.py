@@ -1,0 +1,234 @@
+import os
+import boto3
+import json
+import requests
+
+base_url = os.environ['DATANASQUE_BASE_URL'] # change base url to the url of the DataMasque instance
+
+user_username = os.environ['DATAMASQUE_USER']
+user_password = os.environ['DATAMASQUE_PASSWORD']
+
+
+def login(base_url, username, password):
+    """
+    Login with username and password to get user_token
+    which can be used for other API
+
+    full_url = 'https://masque.local/api/auth/token/login/'
+    method = 'POST'
+
+    data parameters:
+        'username': 'your_username',
+        'password': 'your_password'
+
+    status_code[200] == Success
+    return json:
+        {'id': 11,
+         'key': '38e1befbdcbea57b838082e7d7612bee392d33e3',
+         'client_ip': '172.18.0.1',
+         'client_browser': 'Firefox',
+         'client_os': 'Ubuntu',
+         'client_device': 'Other',
+         'date_time_created': '2022-02-13T21:36:23.468892Z',
+         'date_time_expires': '2022-02-14T07:22:11.917111Z'}
+
+    """
+    api = 'api/auth/token/login/'
+    data = {'username' : username, 'password': password}
+    response = requests.post(base_url+api, data=data, verify=False)
+    print(response)
+    print(response.json())
+    return response.json()
+
+
+def connections(base_url, token, connection_id=None):
+    """
+    Read all database connections
+
+    Can also use the same URL followed by the 'id' to only get info about that connection
+    ex: 'https://masque.local/api/connections/6659eaef-f821-4e96-a659-cd3ff73f7a02'
+
+    full_url = 'https://masque.local/api/connections/'
+    method = 'GET'
+
+    headers = {'Authorization': 'Token ' + 'your_user_token'}
+
+    data parameters:
+        None
+
+   status_code[200] == Success
+
+    return json:
+         [
+          {'name': 'new_postgres2',
+           'user': 'library',
+           'db_type': 'postgres',
+           'database': 'library',
+           'host': 'postgres-dev',
+           'port': 5432, 'password':
+           'Password123',
+           'version': '1.0',
+           'id': '6659eaef-f821-4e96-a659-cd3ff73f7a02',
+           'oracle_wallet': None}
+          ]
+    """
+    if connection_id:
+        api = 'api/connections/{}/'.format(connection_id)
+    else:
+        api = 'api/connections/'
+    response = requests.get(base_url+api, headers=token, verify=False)
+    print(response)
+    print(response.json())
+    return response.json()
+
+
+def rulesets(base_url, token, ruleset_id=None):
+    """
+    Read all rulesets
+
+    Can also use the same URL followed by the 'id' to only get info about that connection
+    ex: 'https://masque.local/api/rulesets/6659eaef-f821-4e96-a659-cd3ff73f7a02'
+
+    full_url = 'https://masque.local/api/rulesets/'
+    method = 'GET'
+
+    headers = {'Authorization': 'Token ' + 'your_user_token'}
+
+    data parameters:
+        None
+
+    status_code[200] == Success
+
+    return json:
+        [
+         {
+          'id': 'ruleset_id',
+          'name': 'rulset_name',
+          'config_yaml': 'ruleset_YAML',
+          'is_valid': True
+          },
+         ]
+    """
+    if ruleset_id:
+        api = 'api/rulesets/{}/'.format(ruleset_id)
+    else:
+        api = 'api/rulesets/'
+    response = requests.get(base_url+api, headers=token, verify=False)
+    print(response)
+    print(response.json())
+    return response.json()
+
+
+def create_run(base_url, token, run_dict):
+    """
+    Create a run
+
+    full_url = 'https://masque.local/api/runs/'
+    method = 'POST'
+
+    headers = {'Authorization': 'Token ' + 'your_user_token'}
+
+    JSON parameters:
+       {
+        'name': 'run_name',
+        'connection': 'connection_id',
+        'ruleset': 'ruleset_id',
+        'options': {
+            'dry_run': False, 'buffer_size': 10000, 'continue_on_failure': False, 'run_secret': 'thisismynewrunsecret'
+            }
+       }
+
+    status_code[201] == Success
+
+    return json:
+        {'id': xxx,
+         'name': 'run_name',
+         'status': 'queued',
+         'connection': 'connection_id',
+         'connection_name': 'connection_name',
+         'ruleset': 'ruleset_id',
+         'ruleset_name': 'ruleset_name',
+         'created_time': '2022-02-15T02:01:33.012798Z',
+         'start_time': None,
+         'end_time': None,
+         'options': {'dry_run': False, 'buffer_size': 10000, 'continue_on_failure': False, 'run_secret': ''},
+         'has_sdd_report': False
+         }
+    """
+    api = 'api/runs/'
+    response = requests.post(base_url+api, json=run_dict, headers=token, verify=False)
+    print(response)
+    print(response.json())
+    return response.json()
+
+
+def runs(base_url, token, run_id=None):
+    """
+    Read all the run logs
+    Can also use the same URL followed by the 'id' to only get info about that connection
+    ex: 'https://masque.local/api/runs/6659eaef-f821-4e96-a659-cd3ff73f7a02/'
+
+    full_url = 'https://masque.local/api/runs/'
+    method = 'GET'
+
+    headers = {'Authorization': 'Token ' + 'your_user_token'}
+
+    data parameters:
+       None
+
+    status_code[200] == Success
+
+    return json:
+        {
+         'id': 180, 
+         'name': 'test_run', 
+         'status': 'failed', 
+         'connection': 'some_connection_id', 
+         'connection_name': 'new_postgres', 
+         'ruleset': 'some_ruleset_id', 
+         'ruleset_name': 'test_ruleset', 
+         'created_time': '2022-02-24T22:52:58.233400Z', 
+         'start_time': '2022-02-24T22:53:00.291878Z', 
+         'end_time': '2022-02-24T22:53:01.501147Z', 
+         'options': {'dry_run': False, 'buffer_size': 10000, 'continue_on_failure': False, 'run_secret': None}, 
+         'has_sdd_report': False
+         }
+
+    """
+    if run_id:
+        api = 'api/runs/{}/'.format(run_id)
+    else:
+        api = 'api/runs/'
+    response = requests.get(base_url+api, headers=token, verify=False)
+    print(response)
+    print(response.json())
+    return response.json()
+
+def check_run(run_id):
+    user_login_res = login(base_url, user_username, user_password)
+    print()
+    user_token = {'Authorization': 'Token ' + user_login_res['key']}
+    runs(base_url, user_token, run_id) # replace '180' with some run id
+
+def lambda_handler(event, context):
+
+  print(json.dumps(event))
+  DBInstanceIdentifier = event["DBInstanceIdentifier"]
+  
+  user_login_res = login(base_url, user_username, user_password)
+  token = {'Authorization': 'Token ' + user_login_res['key']}
+  run_dict = {
+        'name': 'datamasque_blueprint',
+        'connection': os.environ['DATAMASQUE_CONNECTION_ID'],
+        'ruleset': os.environ['DATAMASQUE_RULESET_ID'],
+        'options': {
+            'dry_run': False, 'buffer_size': 10000, 'continue_on_failure': False, 'run_secret': 'thisismynewrunsecret'
+            }
+       }
+  response = create_run(base_url, token, run_dict)
+
+  print(response)
+
+  run_id = response["id"]
+
+  return {'run_id': run_id, 'DBInstanceIdentifier': DBInstanceIdentifier}
