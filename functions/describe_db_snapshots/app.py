@@ -19,7 +19,8 @@ def lambda_handler(event, context):
   sorted_list = sorted(list, key=itemgetter('SnapshotCreateTime'), reverse=True)
 
   latest_snapshot_id = {
-    "DBSnapshotIdentifier": sorted_list[0]["DBSnapshotIdentifier"]
+    "DBSnapshotIdentifier": sorted_list[0]["DBSnapshotIdentifier"],
+    "DBInstanceIdentifier": DBInstanceIdentifier
   }
 
   return latest_snapshot_id

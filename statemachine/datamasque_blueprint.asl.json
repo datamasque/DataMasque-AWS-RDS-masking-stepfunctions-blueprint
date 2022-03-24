@@ -65,7 +65,7 @@
         "DbSnapshotIdentifier.$": "States.Format('{}-{}',$.DBInstanceIdentifier, $.Timestamp)"
       },
       "Resource": "arn:aws:states:::aws-sdk:rds:createDBSnapshot",
-      "Next": "DeleteDBInstance",
+      "Next": "Wait for Snapshot",
       "Catch": [
         {
           "ErrorEquals": [
@@ -74,7 +74,13 @@
           "Next": "DeleteDBInstance",
           "ResultPath": "$.TaskResult"
         }
-      ]
+      ],
+      "ResultPath": null
+    },
+    "Wait for Snapshot": {
+      "Type": "Wait",
+      "Seconds": 300,
+      "Next": "DeleteDBInstance"
     },
     "DeleteDBInstance": {
       "Type": "Task",

@@ -3,22 +3,23 @@ import boto3
 
 def lambda_handler(event, context):
   
-  DBSnapshotIdentifier = event["DBSnapshotIdentifier"]
-  
+  db_snapshot_identifier = event["DBSnapshotIdentifier"]
+  db_instance_identifier = event['DBInstanceIdentifier']
+
   client = boto3.client('rds')
 
   response = client.describe_db_instances(
-    DBInstanceIdentifier='dtq-postgres-datamasque-2a-04-rds',
+    DBInstanceIdentifier=db_instance_identifier,
   )
-  
+
   instance = response["DBInstances"][0]
-  
+
   security_groups = instance["VpcSecurityGroups"]
- 
+
   VpcSecurityGroupIds = [d['VpcSecurityGroupId'] for d in security_groups]
-  
+
   parameters = {
-    "DBSnapshotIdentifier": DBSnapshotIdentifier,
+    "DBSnapshotIdentifier": db_snapshot_identifier,
     "DBInstanceIdentifier": instance["DBInstanceIdentifier"] + "-datamasque",
     "DBInstanceClass": instance["DBInstanceClass"],
     "AvailabilityZone": instance["AvailabilityZone"],

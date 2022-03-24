@@ -2,6 +2,18 @@
 
 ## Introduction
 
+## Network
+
+The assumption is that basic connectivity has been established as follows:
+
+- The AWS Lambdas are provisioned inside a VPC in a **private subnet**. It's recommended to provide at least two **SubnetIDs** for availability reasons.
+- The Origin RDS DB instance **must** allow inbound connections from the DataMasque EC2 instance. The configuration will be replicated when creating the staging RDS.
+- The DataMasque EC2 instance **must** allow inbound connections from the **DatamasqueAPIRun** Lambda.
+
+The diagram below describes the connections, API calls and resources placement within the VPC.
+
+![Network requirements](/network.png "Network requirements")
+
 ## Deployment
 
 ### Requirements
@@ -10,7 +22,6 @@
 - AWS SAM CLI
 - DATAMASQUE `connection id` and `ruleset`. 
 
-
 The RDS instance created will follow the same RDS endpoint name schema as the target database with a `datamasque` prefix:
 
 |RDS database|Endpoint|
@@ -18,7 +29,9 @@ The RDS instance created will follow the same RDS endpoint name schema as the ta
 |Origin RDS instance|``prod-postgres-04``.cxyxaxayxya.ap-southeast-2.rds.amazonaws.com|
 |Staging RDS instance|``prod-postgres-04-datamasque``.cxyxaxayxya.ap-southeast-2.rds.amazonaws.com|
 
-The RDS username, password and connection port should be the same as the target RDS instance.
+The RDS username, password and connection port will be the same as the target RDS instance.
+
+The connection ID required during the template provisioning, refers to the **Staging RDS instance** and **must** exist before the StepFunction can run.
 
 ### Step-by-step
 
@@ -113,3 +126,10 @@ The masked snapshot can be shared with the following methods:
  - Add an RDS modify db snapshot step to the lambda function.
  - Use the native mechanism within the AWS Console.
  - Use an existing CI/CD pipeline to copy and re-encrypt the snapshot.
+
+## Planned improvements
+
+- Improve handling of DataMasque instance password using AWS Secrets Manager.
+- Create the DataMasque connection with the staging RDS instance dynamically via the API.
+- Improve the RestoreFromSnapshot API call handling to retrieve the RDS DB instance provisioning status.
+
