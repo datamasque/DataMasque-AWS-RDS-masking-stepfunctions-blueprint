@@ -1,4 +1,4 @@
-# AWS SAM template datamasque-aws-blueprint
+# DataMasque AWS Masking Stepfunctions Blueprint
 
 ## Introduction
 This DataMasque blueprint is written in AWS CloudFormation format to provision resources that automate data masking workflow on RDS instances using native AWS services.
