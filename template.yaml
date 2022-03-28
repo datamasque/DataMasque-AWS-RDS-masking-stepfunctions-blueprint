@@ -187,6 +187,6 @@ Resources:
             Description: Schedule to run the DATAMASQUE state machine weekly
             Enabled: False 
             Schedule: "rate(7 days)"
-            Input: '{"DBInstanceIdentifier": "dtq-postgres-datamasque-2a-04-rds"}'
+            Input: '{"DBInstanceIdentifier": "source-postgres-rds"}'
 
   
