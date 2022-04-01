@@ -4,7 +4,11 @@
 
 DataMasque AWS blueprint template is written in AWS CloudFormation format.  The purpose of this template is to create a reusable data provisioning pipeline that calls DataMasque APIs to produce masked data that's safe for consumption in non-production environment.
 
-The diagram below describes the DataMasque reference architecture in AWS.  This blueprint template currently includes actions 3 to 7 on the diagram.  Actions 1,2 and 8 are planned and will be included in the next iteration of this template.
+The diagram below describes the DataMasque reference architecture in AWS.  
+
+Notes:
+- This blueprint template currently includes actions 3 to 7 on the diagram.  
+- Actions 1,2 and 8 are planned and will be included in the next iteration of this template.
 
 ![Reference deployment](/reference_deployment.png "Reference deployment")
 
