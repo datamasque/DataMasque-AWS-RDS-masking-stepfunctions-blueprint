@@ -18,8 +18,9 @@ The provisioned stepfunction coordinates tasks by calling AWS components/service
 
 You can trigger a data masking workflow by providing a RDS identifier to invoke execution of the deployed stepfunction.  Upon completing the data masking workflow, an encrypted and masked RDS snapshot is produced, ready to be used to provision non-production databases.
 
-Note:
-- This blueprint template currently includes actions 3 to 7 depicted on the reference architecture diagram.  Actions 1,2 and 8 are planned and will be included in the next iteration of this template.
+Notes:
+- This blueprint template currently includes actions 3 to 7 depicted on the reference architecture diagram.  
+- The rest of the actions are planned and will be included in the next iterations of this template.
 
 ## Network
 
