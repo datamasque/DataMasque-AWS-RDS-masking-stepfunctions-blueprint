@@ -1,7 +1,12 @@
 # DataMasque AWS Masking Stepfunctions Blueprint
 
 ## Introduction
-This DataMasque blueprint is written in AWS CloudFormation format to provision resources that automate data masking workflow on RDS instances using native AWS services.
+
+DataMasque AWS blueprint template is written in AWS CloudFormation format.  The purpose of this template is to create a reusable data provisioning pipeline that calls DataMasque APIs to produce masked data that's safe for consumption in non-production environment.
+
+The diagram below describes the DataMasque reference architecture in AWS.  This blueprint template currently includes actions 3 to 7 on the diagram.  Actions 1,2 and 8 are planned and will be included in the next iteration of this template.
+
+![Reference deployment](/reference_deployment.png "Reference deployment")
 
 The following lists the main AWS resources provisioned when this CloudFormation template is deployed:
 - An AWS stepfunction.
