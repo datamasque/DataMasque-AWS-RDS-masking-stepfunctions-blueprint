@@ -6,10 +6,6 @@ DataMasque AWS blueprint template is written in AWS CloudFormation format.  The 
 
 The diagram below describes the DataMasque reference architecture in AWS.  
 
-Notes:
-- This blueprint template currently includes actions 3 to 7 on the diagram.  
-- Actions 1,2 and 8 are planned and will be included in the next iteration of this template.
-
 ![Reference deployment](/reference_deployment.png "Reference deployment")
 
 The following lists the main AWS resources provisioned when this CloudFormation template is deployed:
@@ -21,6 +17,9 @@ The following lists the main AWS resources provisioned when this CloudFormation 
 The provisioned stepfunction coordinates tasks by calling AWS components/services and DataMasque masking APIs to irreversibly replaces sensitive data such as PII, PCI and PHI with realistic, functional and consistent values.  
 
 You can trigger a data masking workflow by providing a RDS identifier to invoke execution of the deployed stepfunction.  Upon completing the data masking workflow, an encrypted and masked RDS snapshot is produced, ready to be used to provision non-production databases.
+
+Note:
+- This blueprint template currently includes actions 3 to 7 depicted on the reference architecture diagram.  Actions 1,2 and 8 are planned and will be included in the next iteration of this template.
 
 ## Network
 
