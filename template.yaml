@@ -26,6 +26,11 @@ Parameters:
 
 Resources:
 
+  RestoreDBInstanceFromSnapshotSQS:
+    Type: AWS::SQS::Queue
+    Properties:
+      MessageRetentionPeriod: 300
+
   DatamasqueBlueprintSQS:
     Type: AWS::SQS::Queue
     Properties:
@@ -150,6 +155,35 @@ Resources:
             Effect: Allow
             Resource: "*"
 
+  WaitRestoreDBInstanceFromSnapshot:
+    Type: AWS::Serverless::Function # More info about Function Resource: https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/sam-resource-function.html
+    Properties:
+      CodeUri: functions/wait_restore_db_instance_from_db_snapshot/
+      Handler: app.lambda_handler
+      Runtime: python3.9
+      Timeout: 10
+      Architectures:
+        - x86_64
+      Events:
+        SQSEvent:
+          Type: SQS
+          Properties:
+            Queue: !GetAtt RestoreDBInstanceFromSnapshotSQS.Arn
+            BatchSize: 1
+      Policies:
+        - AmazonRDSReadOnlyAccess
+        - SQSSendMessagePolicy:
+            QueueName: !GetAtt RestoreDBInstanceFromSnapshotSQS.QueueName
+        - Statement:
+            - Action:
+                - states:SendTaskSuccess
+                - states:SendTaskFailure
+              Effect: Allow
+              Resource: !GetAtt DatamasqueBluepringStateMachine.Arn
+      Environment:
+        Variables:
+          SQS_URL: !Ref RestoreDBInstanceFromSnapshotSQS
+
   DatamasqueBluepringStateMachine:
     Type: AWS::Serverless::StateMachine # More info about State Machine Resource: https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/sam-resource-statemachine.html
     Properties:
@@ -179,7 +213,9 @@ Resources:
           - Action:
             - sqs:SendMessage
             Effect: Allow
-            Resource: !GetAtt DatamasqueBlueprintSQS.Arn
+            Resource:
+              - !GetAtt DatamasqueBlueprintSQS.Arn
+              - !GetAtt RestoreDBInstanceFromSnapshotSQS.Arn
       Events:
         Schedule:
           Type: Schedule # More info about Schedule Event Source: https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/sam-property-statemachine-schedule.html
