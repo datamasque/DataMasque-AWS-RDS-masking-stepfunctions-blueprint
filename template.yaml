@@ -194,6 +194,7 @@ Resources:
         DescribeDBInstancesFunctionArn: !GetAtt DescribeDBInstances.Arn
         RestoreDBInstanceFromSnapshotFunctionArn: !GetAtt RestoreDBInstanceFromSnapshot.Arn
         DatamasqueBlueprintSQSQueue: !Ref DatamasqueBlueprintSQS
+        RestoreDBInstanceFromSnapshotSQSQueue: !Ref RestoreDBInstanceFromSnapshotSQS
       Policies:
         - LambdaInvokePolicy:
             FunctionName: !Ref DescribeDBInstances
