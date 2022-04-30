@@ -5,8 +5,7 @@ import requests
 
 base_url = os.environ['DATANASQUE_BASE_URL'] # change base url to the url of the DataMasque instance
 
-user_username = os.environ['DATAMASQUE_USER']
-user_password = os.environ['DATAMASQUE_PASSWORD']
+datamasque_secret_arn = os.environ['DATAMASQUE_SECRET_ARN']
 
 
 def login(base_url, username, password):
@@ -180,17 +179,17 @@ def runs(base_url, token, run_id=None):
 
     return json:
         {
-         'id': 180, 
-         'name': 'test_run', 
-         'status': 'failed', 
-         'connection': 'some_connection_id', 
-         'connection_name': 'new_postgres', 
-         'ruleset': 'some_ruleset_id', 
-         'ruleset_name': 'test_ruleset', 
-         'created_time': '2022-02-24T22:52:58.233400Z', 
-         'start_time': '2022-02-24T22:53:00.291878Z', 
-         'end_time': '2022-02-24T22:53:01.501147Z', 
-         'options': {'dry_run': False, 'buffer_size': 10000, 'continue_on_failure': False, 'run_secret': None}, 
+         'id': 180,
+         'name': 'test_run',
+         'status': 'failed',
+         'connection': 'some_connection_id',
+         'connection_name': 'new_postgres',
+         'ruleset': 'some_ruleset_id',
+         'ruleset_name': 'test_ruleset',
+         'created_time': '2022-02-24T22:52:58.233400Z',
+         'start_time': '2022-02-24T22:53:00.291878Z',
+         'end_time': '2022-02-24T22:53:01.501147Z',
+         'options': {'dry_run': False, 'buffer_size': 10000, 'continue_on_failure': False, 'run_secret': None},
          'has_sdd_report': False
          }
 
@@ -212,23 +211,35 @@ def check_run(run_id):
 
 def lambda_handler(event, context):
 
-  print(json.dumps(event))
-  DBInstanceIdentifier = event["DBInstanceIdentifier"]
-  
-  user_login_res = login(base_url, user_username, user_password)
-  token = {'Authorization': 'Token ' + user_login_res['key']}
-  run_dict = {
+    print(json.dumps(event))
+
+    client = boto3.client('secretsmanager')
+
+    response = client.get_secret_value(
+        SecretId=datamasque_secret_arn,
+    )
+
+    datamasque_credential = json.loads(response['SecretString'])
+
+    user_username = datamasque_credential['username']
+    user_password = datamasque_credential['password']
+
+    DBInstanceIdentifier = event["DBInstanceIdentifier"]
+
+    user_login_res = login(base_url, user_username, user_password)
+    token = {'Authorization': 'Token ' + user_login_res['key']}
+    run_dict = {
         'name': 'datamasque_blueprint',
         'connection': os.environ['DATAMASQUE_CONNECTION_ID'],
         'ruleset': os.environ['DATAMASQUE_RULESET_ID'],
         'options': {
             'dry_run': False, 'buffer_size': 10000, 'continue_on_failure': False, 'run_secret': 'thisismynewrunsecret'
-            }
-       }
-  response = create_run(base_url, token, run_dict)
+        }
+    }
+    response = create_run(base_url, token, run_dict)
 
-  print(response)
+    print(response)
 
-  run_id = response["id"]
+    run_id = response["id"]
 
-  return {'run_id': run_id, 'DBInstanceIdentifier': DBInstanceIdentifier}
+    return {'run_id': run_id, 'DBInstanceIdentifier': DBInstanceIdentifier}

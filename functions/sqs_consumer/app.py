@@ -7,8 +7,8 @@ import datetime
 
 base_url = os.environ['DATANASQUE_BASE_URL'] # change base url to the url of the DataMasque instance
 
-user_username = os.environ['DATAMASQUE_USER']
-user_password = os.environ['DATAMASQUE_PASSWORD']
+datamasque_secret_arn = os.environ['DATAMASQUE_SECRET_ARN']
+
 
 def login(base_url, username, password):
     """
@@ -181,17 +181,17 @@ def runs(base_url, token, run_id=None):
 
     return json:
         {
-         'id': 180, 
-         'name': 'test_run', 
-         'status': 'failed', 
-         'connection': 'some_connection_id', 
-         'connection_name': 'new_postgres', 
-         'ruleset': 'some_ruleset_id', 
-         'ruleset_name': 'test_ruleset', 
-         'created_time': '2022-02-24T22:52:58.233400Z', 
-         'start_time': '2022-02-24T22:53:00.291878Z', 
-         'end_time': '2022-02-24T22:53:01.501147Z', 
-         'options': {'dry_run': False, 'buffer_size': 10000, 'continue_on_failure': False, 'run_secret': None}, 
+         'id': 180,
+         'name': 'test_run',
+         'status': 'failed',
+         'connection': 'some_connection_id',
+         'connection_name': 'new_postgres',
+         'ruleset': 'some_ruleset_id',
+         'ruleset_name': 'test_ruleset',
+         'created_time': '2022-02-24T22:52:58.233400Z',
+         'start_time': '2022-02-24T22:53:00.291878Z',
+         'end_time': '2022-02-24T22:53:01.501147Z',
+         'options': {'dry_run': False, 'buffer_size': 10000, 'continue_on_failure': False, 'run_secret': None},
          'has_sdd_report': False
          }
 
@@ -206,62 +206,75 @@ def runs(base_url, token, run_id=None):
     return response.json()
 
 def check_run(run_id):
+
+    client = boto3.client('secretsmanager')
+
+    response = client.get_secret_value(
+        SecretId=datamasque_secret_arn,
+    )
+
+    datamasque_credential = json.loads(response['SecretString'])
+
+    user_username = datamasque_credential['username']
+    user_password = datamasque_credential['password']
+
     user_login_res = login(base_url, user_username, user_password)
     user_token = {'Authorization': 'Token ' + user_login_res['key']}
+
     return runs(base_url, user_token, run_id) # replace '180' with some run id
 
 def lambda_handler(event, context):
-  
-  print(json.dumps(event))
-  
-  message_body = json.loads(event["Records"][0]["body"])
-  taskToken = message_body["taskToken"]
-  run_id = message_body["input"]["run_id"]
-  db_instance_identifier = message_body["input"]["DBInstanceIdentifier"]
-  
-    
-  client_stepfunctions = boto3.client('stepfunctions')
-  client_sqs = boto3.client('sqs')
-  
-  user_login_res = login(base_url, user_username, user_password)
-  token = {'Authorization': 'Token ' + user_login_res['key']}
-    
-  response = check_run(run_id)
-  print(response)
-  
-  status = response['status']
-  print(status)
-    
-  if status == 'finished':
-    print("DATAMASQUE job status=finished")
-    timestamp = datetime.datetime.now()
-    client_stepfunctions.send_task_success(
-      taskToken=taskToken,
-      output=json.dumps(
-          {
-              "DBInstanceIdentifier": db_instance_identifier,
-              "Timestamp": timestamp.strftime('%Y-%m-%d-%H-%M')
-          }
+
+    print(json.dumps(event))
+
+    message_body = json.loads(event["Records"][0]["body"])
+    taskToken = message_body["taskToken"]
+    run_id = message_body["input"]["run_id"]
+    db_instance_identifier = message_body["input"]["DBInstanceIdentifier"]
+
+
+    client_stepfunctions = boto3.client('stepfunctions')
+    client_sqs = boto3.client('sqs')
+
+    #   user_login_res = login(base_url, user_username, user_password)
+    #   token = {'Authorization': 'Token ' + user_login_res['key']}
+
+    response = check_run(run_id)
+    print(response)
+
+    status = response['status']
+    print(status)
+
+    if status == 'finished':
+        print("DATAMASQUE job status=finished")
+        timestamp = datetime.datetime.now()
+        client_stepfunctions.send_task_success(
+            taskToken=taskToken,
+            output=json.dumps(
+                {
+                    "DBInstanceIdentifier": db_instance_identifier,
+                    "Timestamp": timestamp.strftime('%Y-%m-%d-%H-%M')
+                }
+            )
         )
-    )
-  else:
-    if status == 'failed':
-      print("DATAMASQUE job status=failed")
-      client_stepfunctions.send_task_failure(
-        taskToken=taskToken,
-        error='failed',
-        cause='failed'
-      )
     else:
-      if status == 'cancelled':
-        print("DATAMASQUE job status=cancelled")
-        client_stepfunctions.send_task_failure(
-          taskToken=taskToken,
-          error='failed',
-          cause='failed'
-        )
-      else:
-        print("Sending message SQS...")        
-        queue_url = os.environ['SQS_URL']
-        response = client_sqs.send_message(QueueUrl=queue_url, DelaySeconds=120, MessageBody=json.dumps(message_body))
-        print(response)
+        if status == 'failed':
+            print("DATAMASQUE job status=failed")
+            client_stepfunctions.send_task_failure(
+                taskToken=taskToken,
+                error='failed',
+                cause='failed'
+            )
+        else:
+            if status == 'cancelled':
+                print("DATAMASQUE job status=cancelled")
+                client_stepfunctions.send_task_failure(
+                    taskToken=taskToken,
+                    error='failed',
+                    cause='failed'
+                )
+            else:
+                print("Sending message SQS...")
+                queue_url = os.environ['SQS_URL']
+                response = client_sqs.send_message(QueueUrl=queue_url, DelaySeconds=120, MessageBody=json.dumps(message_body))
+                print(response)

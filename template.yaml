@@ -11,18 +11,15 @@ Parameters:
   DatamasqueBaseUrl:
     Type: String
     Description: DATAMASQUE instance URL.
-  DatmasqueUser:
-    Type: String
-    Description: DATAMASQUE user.
-  DatamasquePassword:
-    Type: String
-    Description: DATAMASQUE password.
   DatamasqueConnectionId:
     Type: String
     Description: DATAMASQUE connection ID.
   DatamasqueRuleSetId:
     Type: String
     Description: DATAMASQUE Rule Set ID.
+  DatamasqueSecretArn:
+    Type: String
+    Description: AWS secret for DATAMASQUE instance credentials.
 
 Resources:
 
@@ -60,6 +57,8 @@ Resources:
             BatchSize: 1
       Policies:
         - VPCAccessPolicy: {}
+        - AWSSecretsManagerGetSecretValuePolicy:
+            SecretArn: !Ref DatamasqueSecretArn
         - SQSSendMessagePolicy:
             QueueName: !GetAtt DatamasqueBlueprintSQS.QueueName
         - Statement:
@@ -76,8 +75,7 @@ Resources:
       Environment:
         Variables:
           DATANASQUE_BASE_URL: !Ref DatamasqueBaseUrl
-          DATAMASQUE_USER: !Ref DatmasqueUser
-          DATAMASQUE_PASSWORD: !Ref DatamasquePassword
+          DATAMASQUE_SECRET_ARN: !Ref DatamasqueSecretArn
           SQS_URL: !Ref DatamasqueBlueprintSQS
 
   DatamasqueRunSg:
@@ -86,7 +84,6 @@ Resources:
       GroupDescription: DATAMASQUE blueprint API run Lambda security group
       VpcId: 
         Ref: VpcId
-              
 
   DatamasqueRun:
     Type: AWS::Serverless::Function
@@ -99,6 +96,8 @@ Resources:
         - x86_64
       Policies:
         - VPCAccessPolicy: {}
+        - AWSSecretsManagerGetSecretValuePolicy:
+            SecretArn: !Ref DatamasqueSecretArn
       VpcConfig:
         SubnetIds:
           Ref: SubnetIds
@@ -107,10 +106,9 @@ Resources:
       Environment:
         Variables:
           DATANASQUE_BASE_URL: !Ref DatamasqueBaseUrl
-          DATAMASQUE_USER: !Ref DatmasqueUser
-          DATAMASQUE_PASSWORD: !Ref DatamasquePassword
           DATAMASQUE_CONNECTION_ID: !Ref DatamasqueConnectionId
           DATAMASQUE_RULESET_ID: !Ref DatamasqueRuleSetId
+          DATAMASQUE_SECRET_ARN: !Ref DatamasqueSecretArn
   
   DescribeDBInstances:
     Type: AWS::Serverless::Function # More info about Function Resource: https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/sam-resource-function.html
