@@ -2,11 +2,11 @@
 
 ## Introduction
 
-DataMasque AWS blueprint template is written in AWS CloudFormation format. The purpose of this template is to create a
+DataMasque AWS blueprint templates are written in AWS CloudFormation format. The purpose of this template is to create a
 reusable data provisioning pipeline that calls DataMasque APIs to produce masked data that's safe for consumption in
 non-production environment.
 
-The diagram below describes the DataMasque reference architecture in AWS.
+The diagram below describes the DataMasque reference architecture in AWS.  This CloudFormation template is used to mask production RDS snapshots, create masked RDS snapshots which can be used to provision non-production databases - this incoporiates steps 1-5 highlighted in blue.  Please refer to [DataMasque AWS Service Catalog Template](https://github.com/datamasque/DataMasque-AWS-service-catalog-database-provisioning-blueprint) to use AWS Service Catalog product as an End User Interface to provision non-production databases using masked RDS snapshots.
 
 ![Reference deployment](reference_deployment.png "Reference deployment")
 
@@ -63,8 +63,7 @@ Make sure you have created a secret with the format below:
 | Parameter                                                                                                              | Description                                                                                                                    |
 |------------------------------------------------------------------------------------------------------------------------|--------------------------------------------------------------------------------------------------------------------------------|
 | VpcId                                                                                                                  | VPC ID where the lambdas will be deployed.                                                                                     |
-| SubnetIds                                                                                                              | List of Subnet IDs where the lambdas will be deployed.  <br> The AWS Lambdas provisioned by this template will be placed on ** |
-| private subnet** inside a VPC. It's recommended to provide at least two **SubnetIds** for redundancy and availability. |                                                                                                                                |
+| SubnetIds                                                                                                              | List of Subnet IDs where the lambdas will be deployed.  <br> The AWS Lambdas provisioned by this template will be placed on **private subnet** inside a VPC. It's recommended to provide at least two **SubnetIds** for redundancy and availability. |                                                                                                                                |
 | DatamasqueBaseUrl                                                                                                      | DataMasque instance URL with the EC2's private IP, i.e. https://\<ec2-instance-private-ip>.                                    |
 | DatamasqueSecretArn                                                                                                    | Secret with DataMasque instance credentials.                                                                                   |
 | DatamasqueConnectionId                                                                                                 | DataMasque connection ID.                                                                                                      |
