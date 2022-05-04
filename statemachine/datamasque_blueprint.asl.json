@@ -19,8 +19,15 @@
       "OutputPath": "$.DBInstance"
     },
     "Wait for DB Instance": {
-      "Type": "Wait",
-      "Seconds": 900,
+      "Type": "Task",
+      "Resource": "arn:aws:states:::sqs:sendMessage.waitForTaskToken",
+      "Parameters": {
+        "MessageBody": {
+          "input.$": "$",
+          "taskToken.$": "$$.Task.Token"
+        },
+        "QueueUrl": "${RestoreDBInstanceFromSnapshotSQSQueue}"
+      },
       "Next": "Datamasque API run"
     },
     "Datamasque API run": {
