@@ -1,4 +1,4 @@
-# DataMasque AWS Masking Stepfunctions Blueprint
+# DataMasque AWS RDS Masking Stepfunctions Blueprint
 
 ## Introduction
 
