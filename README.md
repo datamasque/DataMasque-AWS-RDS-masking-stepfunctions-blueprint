@@ -15,17 +15,12 @@ The following lists the main AWS resources provisioned when this CloudFormation 
 - A SQS queue.
 - A CloudWatch event rule to schedule the Step Function execution once a week.
 
-The provisioned stepfunction coordinates tasks by calling AWS components/services and DataMasque masking APIs to
+The provisioned stepfunctions coordinates tasks by calling AWS components/services and DataMasque masking APIs to
 irreversibly replaces sensitive data such as PII, PCI and PHI with realistic, functional and consistent values.
 
-You can trigger a data masking workflow by providing a RDS identifier to invoke execution of the deployed stepfunction.
+You can trigger a data masking workflow by providing a RDS identifier to invoke execution of the deployed stepfunctions.
 Upon completing the data masking workflow, an encrypted and masked RDS snapshot is produced, ready to be used to
 provision non-production databases.
-
-Notes:
-
-- This blueprint template currently includes actions 3 to 7 depicted on the reference architecture diagram.
-- The rest of the actions are planned and will be included in the next iterations of this template.
 
 ## Network
 
