@@ -97,6 +97,8 @@ parameter_overrides = "VpcId=\"vpc-xxxxxxxx\" SubnetIds=\"subnet-xxxxxxxxxxxxx\"
 - The DataMasque EC2 instance **must** allow inbound connections from the **DatamasqueRun** Lambda.
 - The DataMasque EC2 instance **must** allow inbound connections from the **SqsConsumer** Lambda.
 
+Please also ensure to allow stepfunctions to use the KMS key used on the source database to encrypt masked snapshots.
+
 ## AWS Step Function execution
 
 ### Invoke an execution manually
