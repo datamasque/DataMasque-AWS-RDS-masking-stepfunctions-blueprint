@@ -96,7 +96,7 @@ parameter_overrides = "VpcId=\"vpc-xxxxxxxx\" SubnetIds=\"subnet-xxxxxxxxxxxxx\"
   be replicated when creating the staging RDS.
 - The DataMasque EC2 instance **must** allow inbound connections from the **DatamasqueRun** Lambda.
 - The DataMasque EC2 instance **must** allow inbound connections from the **SqsConsumer** Lambda.
-- Grant permission for the stepfunctions to use the KMS key configured on the source database to encrypt masked snapshots.
+- Grant permissions for the stepfunctions and lambda functions to use the KMS key configured on the source database to encrypt masked snapshots if you are not using the default RDS key.  Note: this template assumes the source database uses default RDS KMS keyas every organization might have different key configuration standard.
 
 ## AWS Step Function execution
 
