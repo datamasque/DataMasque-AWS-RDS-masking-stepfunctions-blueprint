@@ -45,7 +45,7 @@ this template) and the staging RDS instance (provisioned by this template).
 
 ###### Store the DataMasque instance credentials on AWS Secrets Manager.
 
-Make sure you have created a secret with the format below:
+Make sure you have created a secret with the following keys and values:
 
 ```json
 {"username":"datamasque","password":"Example$P@ssword"}
@@ -66,8 +66,8 @@ Make sure you have created a secret with the format below:
 
 1. Clone this repository
 2. Open a terminal in the cloned repository directory
-3. Run `sam build`.
-4. Run `sam deploy --guided`.
+3. Run `sam build`
+4. Run `sam deploy --guided`
 
 During the guided deployment, you will be asked if you would like to save the parameters in an AWS SAM configuration
 file `samconfig.toml`.
