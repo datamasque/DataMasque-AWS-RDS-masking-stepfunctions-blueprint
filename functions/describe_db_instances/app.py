@@ -1,33 +1,38 @@
 import os
+
 import boto3
 
+
 def lambda_handler(event, context):
-  
-  db_snapshot_identifier = event["DBSnapshotIdentifier"]
-  db_instance_identifier = event['DBInstanceIdentifier']
 
-  client = boto3.client('rds')
+    db_snapshot_identifier = event["DBSnapshotIdentifier"]
+    db_instance_identifier = event["DBInstanceIdentifier"]
 
-  response = client.describe_db_instances(
-    DBInstanceIdentifier=db_instance_identifier,
-  )
+    client = boto3.client("rds")
 
-  instance = response["DBInstances"][0]
+    response = client.describe_db_instances(
+        DBInstanceIdentifier=db_instance_identifier,
+    )
 
-  security_groups = instance["VpcSecurityGroups"]
+    instance = response["DBInstances"][0]
 
-  VpcSecurityGroupIds = [d['VpcSecurityGroupId'] for d in security_groups]
+    security_groups = instance["VpcSecurityGroups"]
 
-  parameters = {
-    "DBSnapshotIdentifier": db_snapshot_identifier,
-    "DBInstanceIdentifier": instance["DBInstanceIdentifier"] + "-datamasque",
-    "DBInstanceClass": instance["DBInstanceClass"],
-    "AvailabilityZone": instance["AvailabilityZone"],
-    "DBSubnetGroupName": instance["DBSubnetGroup"]["DBSubnetGroupName"],
-    "OptionGroupName": instance["OptionGroupMemberships"][0]["OptionGroupName"],
-    "DBParameterGroupName": instance["DBParameterGroups"][0]["DBParameterGroupName"],
-    "VpcSecurityGroupIds": VpcSecurityGroupIds,
-    "DeletionProtection": False
-  }
+    VpcSecurityGroupIds = [d["VpcSecurityGroupId"] for d in security_groups]
 
-  return parameters
+    parameters = {
+        "DBSnapshotIdentifier": db_snapshot_identifier,
+        "DBInstanceIdentifier": instance["DBInstanceIdentifier"] + "-datamasque",
+        "DBInstanceClass": instance["DBInstanceClass"],
+        "AvailabilityZone": event["PreferredAZ"],
+        "DBSubnetGroupName": instance["DBSubnetGroup"]["DBSubnetGroupName"],
+        "OptionGroupName": instance["OptionGroupMemberships"][0]["OptionGroupName"],
+        "DBParameterGroupName": instance["DBParameterGroups"][0][
+            "DBParameterGroupName"
+        ],
+        "VpcSecurityGroupIds": VpcSecurityGroupIds,
+        "DeletionProtection": False,
+    }
+
+    event["parameters"] = parameters
+    return event

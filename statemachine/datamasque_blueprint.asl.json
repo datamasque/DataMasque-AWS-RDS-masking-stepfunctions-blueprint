@@ -5,7 +5,28 @@
     "Describe DB Snapshots": {
       "Type": "Task",
       "Resource": "${DescribeDBSnapshotFunctionArn}",
-      "Next": "Describe DB Instances"
+      "Next": "CheckSnapshotStatus"
+    },
+    "CheckSnapshotStatus": {
+      "Type": "Choice",
+      "Choices": [
+        {
+          "Variable": "$.DBSnapshotIdentifierStatus",
+          "StringEquals": "available",
+          "Next": "Describe DB Instances"
+        },
+        {
+          "Variable": "$.SourceDBSnapshotStatus",
+          "StringEquals": "failure",
+          "Next": "FailState"
+        }
+      ],
+      "Default": "WaitforSnapshot"
+    },
+    "WaitforSnapshot": {
+      "Type": "Wait",
+      "Seconds": 120,
+      "Next": "Describe DB Snapshots"
     },
     "Describe DB Instances": {
       "Type": "Task",
@@ -15,85 +36,114 @@
     "Restore DB from Snapshot": {
       "Type": "Task",
       "Resource": "${RestoreDBInstanceFromSnapshotFunctionArn}",
-      "Next": "Wait for DB Instance",
-      "OutputPath": "$.DBInstance"
+      "Next": "CheckDBAvailability"
     },
-    "Wait for DB Instance": {
+    "CheckDBAvailability": {
       "Type": "Task",
-      "Resource": "arn:aws:states:::sqs:sendMessage.waitForTaskToken",
-      "Parameters": {
-        "MessageBody": {
-          "input.$": "$",
-          "taskToken.$": "$$.Task.Token"
+      "Resource": "${CheckDBAvailabilityArn}",
+      "Next": "IsDBAvailable"
+    },
+    "IsDBAvailable": {
+      "Type": "Choice",
+      "Choices": [
+        {
+          "Variable": "$.status",
+          "StringEquals": "available",
+          "Next": "Datamasque API run"
         },
-        "QueueUrl": "${RestoreDBInstanceFromSnapshotSQSQueue}"
-      },
-      "Next": "Datamasque API run"
+        {
+          "Variable": "$.status",
+          "StringEquals": "failure",
+          "Next": "FailState"
+        }
+      ],
+      "Default": "WaitBeforeRetry"
+    },
+    "WaitBeforeRetry": {
+      "Type": "Wait",
+      "Seconds": 60,
+      "Next": "CheckDBAvailability"
+    },
+    "FailState": {
+      "Type": "Fail",
+      "CausePath": "$.Error",
+      "ErrorPath": "$.Error"
     },
     "Datamasque API run": {
       "Type": "Task",
       "Resource": "${DatamasqueRunFunctionArn}",
-      "Next": "SQS SendMessage",
+      "Next": "IsMaskRunComplete",
       "Catch": [
         {
           "ErrorEquals": [
             "States.TaskFailed"
           ],
-          "Next": "DeleteDBInstance",
-          "ResultPath": "$.TaskResult"
+          "Next": "FailState"
         }
       ]
     },
-    "SQS SendMessage": {
-      "Type": "Task",
-      "Resource": "arn:aws:states:::sqs:sendMessage.waitForTaskToken",
-      "Parameters": {
-        "QueueUrl": "${DatamasqueBlueprintSQSQueue}",
-        "MessageBody": {
-          "input.$": "$",
-          "taskToken.$": "$$.Task.Token"
-        }
-      },
-      "Next": "CreateDBSnapshot",
-      "Catch": [
+    "IsMaskRunComplete": {
+      "Type": "Choice",
+      "Choices": [
         {
-          "ErrorEquals": [
-            "States.TaskFailed"
-          ],
-          "Next": "DeleteDBInstance",
-          "ResultPath": "$.TaskResult"
+          "Variable": "$.MaskRunStatus",
+          "StringMatches": "finish*",
+          "Next": "CreateDBSnapshot"
+        },
+        {
+          "Variable": "$.MaskRunStatus",
+          "StringMatches": "fail*",
+          "Next": "FailState"
         }
-      ]
+      ],
+      "Default": "MaskingRunInProgress"
+    },
+    "MaskingRunInProgress": {
+      "Type": "Wait",
+      "Seconds": 60,
+      "Next": "CheckMaskingRunStatus"
+    },
+    "CheckMaskingRunStatus": {
+      "Type": "Task",
+      "Resource": "${CheckMaskingRunStatus}",
+      "Next": "IsMaskRunComplete"
     },
     "CreateDBSnapshot": {
       "Type": "Task",
-      "Parameters": {
-        "DbInstanceIdentifier.$": "$.DBInstanceIdentifier",
-        "DbSnapshotIdentifier.$": "States.Format('{}-{}',$.DBInstanceIdentifier, $.Timestamp)"
-      },
-      "Resource": "arn:aws:states:::aws-sdk:rds:createDBSnapshot",
-      "Next": "Wait for Snapshot",
-      "Catch": [
+      "Resource": "${CreateMaskedSnapshot}",
+      "Next": "CheckMaskedSnapshotStatus"
+    },
+    "CheckMaskedSnapshotStatus": {
+      "Type": "Choice",
+      "Choices": [
         {
-          "ErrorEquals": [
-            "States.TaskFailed"
-          ],
-          "Next": "DeleteDBInstance",
-          "ResultPath": "$.TaskResult"
+          "Variable": "$.MaskedDBSnapshotIdentifier",
+          "StringEquals": "available",
+          "Next": "DeleteDBInstance"
+        },
+        {
+          "Variable": "$.MaskedSnapshotStatus",
+          "StringEquals": "failure",
+          "Next": "FailState"
         }
       ],
-      "ResultPath": null
+      "Default": "WaitforMaskedSnapshot"
     },
-    "Wait for Snapshot": {
+    "WaitforMaskedSnapshot": {
       "Type": "Wait",
-      "Seconds": 300,
-      "Next": "DeleteDBInstance"
+      "Seconds": 60,
+      "Next": "CheckMaskedSnapshot"
+    },
+    "CheckMaskedSnapshot": {
+      "Type": "Task",
+      "Resource": "${CheckMaskedSnapshot}",
+      "Next": "CheckMaskedSnapshotStatus"
     },
     "DeleteDBInstance": {
       "Type": "Task",
       "End": true,
       "Parameters": {
-        "DbInstanceIdentifier.$": "$.DBInstanceIdentifier",
+        "DbInstanceIdentifier.$": "$.DBInstance",
         "SkipFinalSnapshot": true
       },
       "Resource": "arn:aws:states:::aws-sdk:rds:deleteDBInstance"
