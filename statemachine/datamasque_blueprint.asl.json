@@ -117,7 +117,7 @@
       "Type": "Choice",
       "Choices": [
         {
-          "Variable": "$.MaskedDBSnapshotIdentifier",
+          "Variable": "$.MaskedSnapshotStatus",
           "StringEquals": "available",
           "Next": "DeleteDBInstance"
         },
