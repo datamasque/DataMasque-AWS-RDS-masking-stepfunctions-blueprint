@@ -11,13 +11,13 @@
       "Type": "Choice",
       "Choices": [
         {
-          "Variable": "$.DBSnapshotIdentifierStatus",
+          "Variable": "$.SourceDBSnapshotStatus",
           "StringEquals": "available",
           "Next": "Describe DB Instances"
         },
         {
           "Variable": "$.SourceDBSnapshotStatus",
-          "StringEquals": "failure",
+          "StringEquals": "failed",
           "Next": "FailState"
         }
       ],
@@ -141,12 +141,18 @@
     },
     "DeleteDBInstance": {
       "Type": "Task",
-      "End": true,
+      "ResultPath": null,
       "Parameters": {
         "DbInstanceIdentifier.$": "$.DBInstance",
         "SkipFinalSnapshot": true
       },
+      "Next": "OutputMaskedSnapshot",
       "Resource": "arn:aws:states:::aws-sdk:rds:deleteDBInstance"
+    },
+    "OutputMaskedSnapshot": {
+      "Type": "Pass",
+      "OutputPath": "$.MaskedDBSnapshotIdentifier",
+      "End": true
     }
   }
 }

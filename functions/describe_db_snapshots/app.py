@@ -1,3 +1,4 @@
+import json
 import os
 from datetime import datetime
 from operator import itemgetter
@@ -34,32 +35,33 @@ def lambda_handler(event, context):
             )
             current_date = datetime.now().strftime("%d%b%Y%H%M")
             response = client.create_db_snapshot(
-                DBSnapshotIdentifier=f"{db_instance_resp['DBInstances']['DBInstanceIdentifier']}-datamasque-{current_date}",
-                DBInstanceIdentifier=db_instance_resp["DBInstances"][
+                DBSnapshotIdentifier=f"{db_instance_resp['DBInstances'][0]['DBInstanceIdentifier']}-datamasque-{current_date}",
+                DBInstanceIdentifier=db_instance_resp["DBInstances"][0][
                     "DBInstanceIdentifier"
                 ],
             )
             event["DBSnapshotIdentifier"] = response["DBSnapshot"][
                 "DBSnapshotIdentifier"
             ]
-            event["DBSnapshotIdentifierStatus"] = response["DBSnapshot"]["Status"]
+            event["SourceDBSnapshotStatus"] = response["DBSnapshot"]["Status"]
         else:
-            list = response["DBSnapshots"]
+            snapshots = response["DBSnapshots"]
             sorted_list = sorted(
-                list, key=itemgetter("SnapshotCreateTime"), reverse=True
+                snapshots, key=itemgetter("SnapshotCreateTime"), reverse=True
             )
-        event["DBSnapshotIdentifier"] = sorted_list[0]["DBSnapshotIdentifier"]
-        event["DBSnapshotIdentifierStatus"] = sorted_list[0]["Status"]
-        if sorted_list[0]["Status"] == "failed":
-            event["Error"] = (
-                f"Error capturing snapshot: {sorted_list[0]['DBSnapshotIdentifier']}"
-            )
+            event["DBSnapshotIdentifier"] = sorted_list[0]["DBSnapshotIdentifier"]
+            event["SourceDBSnapshotStatus"] = sorted_list[0]["Status"]
+            if sorted_list[0]["Status"] == "failed":
+                event["Error"] = (
+                    f"Error capturing snapshot: {sorted_list[0]['DBSnapshotIdentifier']}"
+                )
 
-            event["SourceDBSnapshotStatus"] = "failure"
-        event["SourceDBSnapshotStatus"] = "failure"
+        print(json.dumps(event))
         return event
+
     except Exception as e:
-        event["SourceDBSnapshotStatus"] = "failure"
+        event["SourceDBSnapshotStatus"] = "failed"
         event["Error"] = f"Error capturing snapshot: {e}"
         print(f"Error capturing snapshot: {e}")
+        print(json.dumps(event))
         return event

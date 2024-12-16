@@ -131,6 +131,7 @@ Resources:
         - Statement:
             - Action:
                 - rds:CreateDBSnapshot
+                - rds:AddTagsToResource
               Effect: Allow
               Resource: "*"
 

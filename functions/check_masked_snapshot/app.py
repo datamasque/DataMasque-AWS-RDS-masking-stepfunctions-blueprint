@@ -1,3 +1,4 @@
+import json
 import os
 from datetime import datetime
 from operator import itemgetter
@@ -36,6 +37,7 @@ def lambda_handler(event, context):
             event["Error"] = (
                 f'Error creating snapshot of masked database: {response["DBSnapshots"][0]["Status"]}'
             )
+        print(json.dumps(event))
         return event
     except Exception as e:
         event["MaskedSnapshotStatus"] = "failed"
