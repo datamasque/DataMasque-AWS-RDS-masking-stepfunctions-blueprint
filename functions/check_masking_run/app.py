@@ -147,7 +147,7 @@ def lambda_handler(event, context):
         user_username = datamasque_credential["username"]
         user_password = datamasque_credential["password"]
         run_id = event["MaskRunId"]
-        DBInstanceIdentifier = event["DBInstance"]
+        DBInstanceIdentifier = event["StageDB"]
         DBSecretIdentifier = event["DBSecretIdentifier"]
         user_login_res = login(base_url, user_username, user_password)
 

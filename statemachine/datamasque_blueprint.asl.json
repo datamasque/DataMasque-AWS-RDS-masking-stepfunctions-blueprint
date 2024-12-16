@@ -119,11 +119,11 @@
         {
           "Variable": "$.MaskedSnapshotStatus",
           "StringEquals": "available",
-          "Next": "DeleteDBInstance"
+          "Next": "DeleteStageDBChoice"
         },
         {
           "Variable": "$.MaskedSnapshotStatus",
-          "StringEquals": "failure",
+          "StringEquals": "failed",
           "Next": "FailState"
         }
       ],
@@ -139,11 +139,36 @@
       "Resource": "${CheckMaskedSnapshot}",
       "Next": "CheckMaskedSnapshotStatus"
     },
-    "DeleteDBInstance": {
+    "DeleteStageDBChoice": {
+      "Type": "Choice",
+      "Choices": [
+        {
+          "Variable": "$.DBType",
+          "StringEquals": "Aurora",
+          "Next": "DeleteStgRDS"
+        },
+        {
+          "Variable": "$.DBType",
+          "StringEquals": "RDS",
+          "Next": "DeleteStgCluster"
+        }
+      ]
+    },
+    "DeleteStgCluster": {
       "Type": "Task",
       "ResultPath": null,
       "Parameters": {
-        "DbInstanceIdentifier.$": "$.DBInstance",
+        "DBClusterIdentifier.$": "$.StageDB",
+        "SkipFinalSnapshot": true
+      },
+      "Next": "OutputMaskedSnapshot",
+      "Resource": "arn:aws:states:::aws-sdk:rds:deleteDBCluster"
+    },
+    "DeleteStgRDS": {
+      "Type": "Task",
+      "ResultPath": null,
+      "Parameters": {
+        "DbInstanceIdentifier.$": "$.StageDB",
         "SkipFinalSnapshot": true
       },
       "Next": "OutputMaskedSnapshot",

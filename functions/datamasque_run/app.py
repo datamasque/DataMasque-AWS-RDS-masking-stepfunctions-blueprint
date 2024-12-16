@@ -399,7 +399,7 @@ def lambda_handler(event, context):
         user_username = datamasque_credential["username"]
         user_password = datamasque_credential["password"]
         dm_ruleset_id = event["DataMasqueRulesetId"]
-        DBInstanceIdentifier = event["DBInstance"]
+        DBInstanceIdentifier = event["StageDB"]
         DBSecretIdentifier = event["DBSecretIdentifier"]
         secret_response = get_secret(DBSecretIdentifier)
         if secret_response:

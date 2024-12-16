@@ -5,34 +5,74 @@ import boto3
 
 def lambda_handler(event, context):
 
+import boto3
+
+def handler(event):
     db_snapshot_identifier = event["DBSnapshotIdentifier"]
     db_instance_identifier = event["DBInstanceIdentifier"]
+    db_type = event["DBType"]  # 'RDS' or 'Aurora'
 
     client = boto3.client("rds")
 
-    response = client.describe_db_instances(
-        DBInstanceIdentifier=db_instance_identifier,
-    )
+    parameters = {}
 
-    instance = response["DBInstances"][0]
+    if db_type == "RDS":
+        response = client.describe_db_instances(
+            DBInstanceIdentifier=db_instance_identifier,
+        )
+        instance = response["DBInstances"][0]
 
-    security_groups = instance["VpcSecurityGroups"]
+        security_groups = instance["VpcSecurityGroups"]
+        VpcSecurityGroupIds = [d["VpcSecurityGroupId"] for d in security_groups]
 
-    VpcSecurityGroupIds = [d["VpcSecurityGroupId"] for d in security_groups]
+        parameters = {
+            "DBSnapshotIdentifier": db_snapshot_identifier,
+            "DBInstanceIdentifier": instance["DBInstanceIdentifier"] + "-datamasque",
+            "DBInstanceClass": instance["DBInstanceClass"],
+            "AvailabilityZone": event.get("PreferredAZ", instance["AvailabilityZone"]),
+            "DBSubnetGroupName": instance["DBSubnetGroup"]["DBSubnetGroupName"],
+            "OptionGroupName": instance["OptionGroupMemberships"][0]["OptionGroupName"]
+            if instance["OptionGroupMemberships"]
+            else None,
+            "DBParameterGroupName": instance["DBParameterGroups"][0][
+                "DBParameterGroupName"
+            ]
+            if instance["DBParameterGroups"]
+            else None,
+            "VpcSecurityGroupIds": VpcSecurityGroupIds,
+            "DeletionProtection": False,
+        }
 
-    parameters = {
-        "DBSnapshotIdentifier": db_snapshot_identifier,
-        "DBInstanceIdentifier": instance["DBInstanceIdentifier"] + "-datamasque",
-        "DBInstanceClass": instance["DBInstanceClass"],
-        "AvailabilityZone": event["PreferredAZ"],
-        "DBSubnetGroupName": instance["DBSubnetGroup"]["DBSubnetGroupName"],
-        "OptionGroupName": instance["OptionGroupMemberships"][0]["OptionGroupName"],
-        "DBParameterGroupName": instance["DBParameterGroups"][0][
-            "DBParameterGroupName"
-        ],
-        "VpcSecurityGroupIds": VpcSecurityGroupIds,
-        "DeletionProtection": False,
-    }
+    elif db_type == "Aurora":
+        # Generate parameters for Aurora cluster restoration
+        response = client.describe_db_clusters(
+            DBClusterIdentifier=db_instance_identifier
+        )
+        cluster = response["DBClusters"][0]
 
+        # Extract VPC Security Group IDs
+        VpcSecurityGroupIds = [
+            d["VpcSecurityGroupId"] for d in cluster["VpcSecurityGroups"]
+        ]
+
+        # Build parameters dictionary for Aurora cluster
+        parameters = {
+            "DBSnapshotIdentifier": db_snapshot_identifier,
+            "DBInstanceIdentifier": db_instance_identifier + "-datamasque",
+            "DBInstanceClass": event.get("DBInstanceClass", "db.r5.large"),  # Default class
+            "AvailabilityZone": event.get("PreferredAZ"),
+            "DBSubnetGroupName": cluster["DBSubnetGroup"],
+            "OptionGroupName": cluster["Engine"], 
+            "DBParameterGroupName": cluster["DBClusterParameterGroup"],
+            "VpcSecurityGroupIds": VpcSecurityGroupIds,
+            "Engine": cluster["Engine"],
+            "EngineMode": cluster.get("EngineMode", "provisioned"),
+            "DeletionProtection": False,
+        }
+
+    else:
+        raise ValueError(f"Invalid DBType '{db_type}'. Expected 'RDS' or 'Aurora'.")
+
+    # Update the event with generated parameters
     event["parameters"] = parameters
     return event
