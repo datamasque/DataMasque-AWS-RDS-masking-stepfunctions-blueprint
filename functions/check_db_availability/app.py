@@ -1,21 +1,19 @@
+import json
+
 import boto3
 
 
 def lambda_handler(event, context):
 
-import boto3
-
-
-def handler(event):
     client = boto3.client("rds")
-    print(event)
+    print(json.dumps(event))
 
     # Check if the previous step failed
     if event.get("status") == "failure":
         return event
 
     try:
-        db_identifier = event["StageDB"] 
+        db_identifier = event["StageDB"]
         db_type = event["DBType"]  # Either "RDS" or "Aurora"
         print(f"DB Identifier: {db_identifier}, DB Type: {db_type}")
 
@@ -24,7 +22,7 @@ def handler(event):
                 DBInstanceIdentifier=db_identifier,
             )
             db_instance = db_response["DBInstances"][0]
-            db_status = db_instance["DBInstanceStatus"].lower()
+            db_status = db_instance["StgDbInstanceStatus"].lower()
 
             response = {
                 "status": db_status,
@@ -38,22 +36,50 @@ def handler(event):
                 DBClusterIdentifier=db_identifier,
             )
             db_cluster = db_response["DBClusters"][0]
-            db_status = db_cluster["Status"].lower()
+            if db_cluster["Status"].lower() == "available":
+                if "StgDbInstanceStatus" not in event:
+                    print("Creating DB instance in the restored Aurora cluster...")
+                    instance_params = {
+                        "DBInstanceIdentifier": f'{event["parameters"]["DBInstanceIdentifier"]}-1',
+                        "DBInstanceClass": event["parameters"]["DBInstanceClass"],
+                        "Engine": event["parameters"]["Engine"],
+                        "DBClusterIdentifier": event["parameters"][
+                            "DBInstanceIdentifier"
+                        ],
+                        "AvailabilityZone": event["PreferredAZ"],
+                        "DBSubnetGroupName": event["parameters"]["DBSubnetGroupName"],
+                    }
+                    if event["parameters"].get("DBParameterGroupName"):
+                        instance_params["DBParameterGroupName"] = event["parameters"][
+                            "DBParameterGroupName"
+                        ]
+                    client.create_db_instance(**instance_params)
+                    event["status"] = "creating"
+                    event["StgDbInstanceStatus"] = "creating"
+                    event["StgDbInstanceId"] = (
+                        f'{event["parameters"]["DBInstanceIdentifier"]}-1'
+                    )
+                else:
+                    db_response = client.describe_db_instances(
+                        DBInstanceIdentifier=f'{event["parameters"]["DBInstanceIdentifier"]}-1',
+                    )
+                    db_instance = db_response["DBInstances"][0]
+                    db_status = db_instance["DBInstanceStatus"].lower()
 
-            response = {
-                "status": db_status,
-                "DBCluster": db_identifier,
-            }
-            event["status"] = db_status
-
+                    response = {
+                        "status": db_status,
+                        "DBInstance": db_identifier,
+                    }
+                    event["status"] = db_status
+                    event["StgDbInstanceStatus"] = db_status
         else:
             raise ValueError(f"Invalid DBType: {db_type}. Expected 'RDS' or 'Aurora'.")
-
-        print(f"DB Status: {response}")
+        print(json.dumps(event))
         return event
 
     except Exception as e:
-        print(f"Error checking status of {event["StageDB"] }: {e}")
+        print(f"Error checking status of {event['StageDB'] }: {e}")
         event["status"] = "failure"
         event["Error"] = f"Error checking DB status: {e}"
+        print(json.dumps(event))
         return event

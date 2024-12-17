@@ -3,7 +3,7 @@ from datetime import datetime
 import boto3
 
 
-def handler(event):
+def lambda_handler(event, context):
     DBId = event["StageDB"]
     DBType = event["DBType"]  # Either "RDS" or "Aurora"
     client = boto3.client("rds")

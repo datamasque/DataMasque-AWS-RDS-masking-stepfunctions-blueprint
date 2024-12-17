@@ -159,10 +159,12 @@ def lambda_handler(event, context):
         if event["MaskRunStatus"] == "complete":
             conn_id = run_response["connection"]
             delete_connection(base_url, token, conn_id)
+        print(json.dumps(event))
         return event
 
     except Exception as e:
         print(f"Error checking rds status: {e}")
         event["MaskRunStatus"] = "failure"
         event["Error"] = f"DataMasque run failed status: {e}"
+        print(json.dumps(event))
         return event

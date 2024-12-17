@@ -1,7 +1,8 @@
 import boto3
 
 
-def handler(event):
+def lambda_handler(event, context):
+
     client = boto3.client("rds")
 
     try:
@@ -11,7 +12,7 @@ def handler(event):
                 DBSnapshotIdentifier=event["parameters"]["DBSnapshotIdentifier"],
                 DBInstanceIdentifier=event["parameters"]["DBInstanceIdentifier"],
                 DBInstanceClass=event["parameters"]["DBInstanceClass"],
-                AvailabilityZone=event["parameters"]["AvailabilityZone"],
+                AvailabilityZone=event["PreferredAZ"],
                 DBSubnetGroupName=event["parameters"]["DBSubnetGroupName"],
                 OptionGroupName=event["parameters"]["OptionGroupName"],
                 DBParameterGroupName=event["parameters"]["DBParameterGroupName"],
@@ -25,13 +26,13 @@ def handler(event):
         elif event["DBType"] == "Aurora":
             # Restore an Aurora cluster from a snapshot
             restore_response = client.restore_db_cluster_from_snapshot(
-                DBClusterSnapshotIdentifier=event["parameters"]["DBSnapshotIdentifier"],
+                SnapshotIdentifier=event["parameters"]["DBSnapshotIdentifier"],
                 DBClusterIdentifier=event["parameters"]["DBInstanceIdentifier"],
                 Engine=event["parameters"]["Engine"],
                 EngineMode=event["parameters"]["EngineMode"],
                 DBSubnetGroupName=event["parameters"]["DBSubnetGroupName"],
                 VpcSecurityGroupIds=event["parameters"]["VpcSecurityGroupIds"],
-                DeletionProtection=event["parameters"]["DeletionProtection"],
+                DeletionProtection=False,
             )
             event["status"] = "success"
             event["StageDB"] = event["parameters"]["DBInstanceIdentifier"]

@@ -416,12 +416,14 @@ def lambda_handler(event, context):
             else:
                 event["MaskRunStatus"] = create_connection_response["status"]
                 event["MaskRunId"] = create_connection_response["id"]
+        print(json.dumps(event))
         return event
 
     except Exception as e:
         print(f"Error executing datamasque run: {e}")
         event["MaskRunStatus"] = "failure"
         event["Error"] = f"Error executing datamasque run: {e}"
+        print(json.dumps(event))
         return event
 
         # if response:

@@ -5,9 +5,6 @@ import boto3
 
 def lambda_handler(event, context):
 
-import boto3
-
-def handler(event):
     db_snapshot_identifier = event["DBSnapshotIdentifier"]
     db_instance_identifier = event["DBInstanceIdentifier"]
     db_type = event["DBType"]  # 'RDS' or 'Aurora'
@@ -31,14 +28,16 @@ def handler(event):
             "DBInstanceClass": instance["DBInstanceClass"],
             "AvailabilityZone": event.get("PreferredAZ", instance["AvailabilityZone"]),
             "DBSubnetGroupName": instance["DBSubnetGroup"]["DBSubnetGroupName"],
-            "OptionGroupName": instance["OptionGroupMemberships"][0]["OptionGroupName"]
-            if instance["OptionGroupMemberships"]
-            else None,
-            "DBParameterGroupName": instance["DBParameterGroups"][0][
-                "DBParameterGroupName"
-            ]
-            if instance["DBParameterGroups"]
-            else None,
+            "OptionGroupName": (
+                instance["OptionGroupMemberships"][0]["OptionGroupName"]
+                if instance["OptionGroupMemberships"]
+                else None
+            ),
+            "DBParameterGroupName": (
+                instance["DBParameterGroups"][0]["DBParameterGroupName"]
+                if instance["DBParameterGroups"]
+                else None
+            ),
             "VpcSecurityGroupIds": VpcSecurityGroupIds,
             "DeletionProtection": False,
         }
@@ -59,16 +58,23 @@ def handler(event):
         parameters = {
             "DBSnapshotIdentifier": db_snapshot_identifier,
             "DBInstanceIdentifier": db_instance_identifier + "-datamasque",
-            "DBInstanceClass": event.get("DBInstanceClass", "db.r5.large"),  # Default class
+            "DBInstanceClass": event.get(
+                "DBInstanceClass", "db.r5.large"
+            ),  # Default class
             "AvailabilityZone": event.get("PreferredAZ"),
             "DBSubnetGroupName": cluster["DBSubnetGroup"],
-            "OptionGroupName": cluster["Engine"], 
-            "DBParameterGroupName": cluster["DBClusterParameterGroup"],
+            "DBClusterParameterGroupName": cluster["DBClusterParameterGroup"],
             "VpcSecurityGroupIds": VpcSecurityGroupIds,
             "Engine": cluster["Engine"],
             "EngineMode": cluster.get("EngineMode", "provisioned"),
             "DeletionProtection": False,
         }
+        instance_response = client.describe_db_instances(
+            DBInstanceIdentifier=cluster["DBClusterMembers"][0]["DBInstanceIdentifier"],
+        )
+        parameters["DBParameterGroupName"] = instance_response["DBInstances"][0][
+            "DBParameterGroups"
+        ][0]["DBParameterGroupName"]
 
     else:
         raise ValueError(f"Invalid DBType '{db_type}'. Expected 'RDS' or 'Aurora'.")

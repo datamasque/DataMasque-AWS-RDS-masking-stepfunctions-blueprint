@@ -16,15 +16,15 @@ Parameters:
     Description: AWS secret for DATAMASQUE instance credentials.
 
 Resources:
-  RestoreDBInstanceFromSnapshotSQS:
-    Type: AWS::SQS::Queue
-    Properties:
-      MessageRetentionPeriod: 300
+  # RestoreDBInstanceFromSnapshotSQS:
+  #   Type: AWS::SQS::Queue
+  #   Properties:
+  #     MessageRetentionPeriod: 300
 
-  DatamasqueBlueprintSQS:
-    Type: AWS::SQS::Queue
-    Properties:
-      MessageRetentionPeriod: 300
+  # DatamasqueBlueprintSQS:
+  #   Type: AWS::SQS::Queue
+  #   Properties:
+  #     MessageRetentionPeriod: 300
 
   # SqsConsumerSg:
   #   Type: AWS::EC2::SecurityGroup
@@ -93,6 +93,8 @@ Resources:
             SecretArn: !Ref DatamasqueSecretArn
         - AWSSecretsManagerGetSecretValuePolicy:
             SecretArn: arn:aws:secretsmanager:ap-southeast-2:897875381524:secret:ae-demo/dm/connections-1d2iUw
+        - AWSSecretsManagerGetSecretValuePolicy:
+            SecretArn: arn:aws:secretsmanager:ap-southeast-2:897875381524:secret:ae-demo/dm/ae-pg-connections-XXpKxx
       VpcConfig:
         SubnetIds:
           Ref: SubnetIds
@@ -131,6 +133,7 @@ Resources:
         - Statement:
             - Action:
                 - rds:CreateDBSnapshot
+                - rds:CreateDBClusterSnapshot
                 - rds:AddTagsToResource
               Effect: Allow
               Resource: "*"
@@ -151,6 +154,7 @@ Resources:
                 - iam:PassRole
                 - rds:AddTagsToResource
                 - rds:RestoreDBInstanceFromDBSnapshot
+                - rds:RestoreDBClusterFromSnapshot
               Effect: Allow
               Resource: "*"
 
@@ -165,6 +169,19 @@ Resources:
         - x86_64
       Policies:
         - AmazonRDSReadOnlyAccess
+        - Statement:
+            - Action:
+                - rds:AddTagsToResource
+              Effect: Allow
+              Resource: "*"
+            - Action:
+                - rds:CreateDBInstance
+                - rds:RestoreDBClusterFromSnapshot
+              Effect: Allow
+              Resource:
+                - !Sub "arn:aws:rds:${AWS::Region}:${AWS::AccountId}:db:*-datamasque-1"
+                - "*"
+                - !Sub "arn:aws:rds:cluster:${AWS::Region}:${AWS::AccountId}:db:*-datamasque"
 
   CreateMaskedSnapshot:
     Type: AWS::Serverless::Function # More info about Function Resource: https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/sam-resource-function.html
@@ -180,6 +197,7 @@ Resources:
         - Statement:
             - Action:
                 - rds:CreateDBSnapshot
+                - rds:CreateDBClusterSnapshot
               Effect: Allow
               Resource: "*"
 
@@ -220,35 +238,6 @@ Resources:
           # DATAMASQUE_RULESET_ID: !Ref DatamasqueRuleSetId
           DATAMASQUE_SECRET_ARN: !Ref DatamasqueSecretArn
 
-  WaitRestoreDBInstanceFromSnapshot:
-    Type: AWS::Serverless::Function # More info about Function Resource: https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/sam-resource-function.html
-    Properties:
-      CodeUri: functions/wait_restore_db_instance_from_db_snapshot/
-      Handler: app.lambda_handler
-      Runtime: python3.9
-      Timeout: 10
-      Architectures:
-        - x86_64
-      Events:
-        SQSEvent:
-          Type: SQS
-          Properties:
-            Queue: !GetAtt RestoreDBInstanceFromSnapshotSQS.Arn
-            BatchSize: 1
-      Policies:
-        - AmazonRDSReadOnlyAccess
-        - SQSSendMessagePolicy:
-            QueueName: !GetAtt RestoreDBInstanceFromSnapshotSQS.QueueName
-        - Statement:
-            - Action:
-                - states:SendTaskSuccess
-                - states:SendTaskFailure
-              Effect: Allow
-              Resource: !GetAtt DatamasqueBlueprintStateMachine.Arn
-      Environment:
-        Variables:
-          SQS_URL: !Ref RestoreDBInstanceFromSnapshotSQS
-
   DatamasqueBlueprintStateMachine:
     Type: AWS::Serverless::StateMachine # More info about State Machine Resource: https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/sam-resource-statemachine.html
     Properties:
@@ -262,8 +251,8 @@ Resources:
         CheckMaskingRunStatus: !GetAtt CheckMaskingRunStatus.Arn
         CreateMaskedSnapshot: !GetAtt CreateMaskedSnapshot.Arn
         CheckMaskedSnapshot: !GetAtt CheckMaskedSnapshot.Arn
-        DatamasqueBlueprintSQSQueue: !Ref DatamasqueBlueprintSQS
-        RestoreDBInstanceFromSnapshotSQSQueue: !Ref RestoreDBInstanceFromSnapshotSQS
+        # DatamasqueBlueprintSQSQueue: !Ref DatamasqueBlueprintSQS
+        # RestoreDBInstanceFromSnapshotSQSQueue: !Ref RestoreDBInstanceFromSnapshotSQS
       Policies:
         - LambdaInvokePolicy:
             FunctionName: !Ref DescribeDBInstances
@@ -285,18 +274,25 @@ Resources:
             - Action:
                 - rds:DeleteDBInstance
               Effect: Allow
-              Resource: !Sub "arn:aws:rds:${AWS::Region}:${AWS::AccountId}:db:*-datamasque"
+              Resource:
+                - !Sub "arn:aws:rds:${AWS::Region}:${AWS::AccountId}:db:*-datamasque"
+                - !Sub "arn:aws:rds:${AWS::Region}:${AWS::AccountId}:db:*-datamasque-1"
+            - Action:
+                - rds:DeleteDBCluster
+              Effect: Allow
+              Resource: !Sub "arn:aws:rds:cluster:${AWS::Region}:${AWS::AccountId}:db:*-datamasque"
             - Action:
                 - rds:CreateDBSnapshot
+                - rds:CreateDBClusterSnapshot
               Effect: Allow
               Resource: "*"
-        - Statement:
-            - Action:
-                - sqs:SendMessage
-              Effect: Allow
-              Resource:
-                - !GetAtt DatamasqueBlueprintSQS.Arn
-                - !GetAtt RestoreDBInstanceFromSnapshotSQS.Arn
+        # - Statement:
+        #     - Action:
+        #         - sqs:SendMessage
+        #       Effect: Allow
+        #       Resource:
+        #         - !GetAtt DatamasqueBlueprintSQS.Arn
+        #         - !GetAtt RestoreDBInstanceFromSnapshotSQS.Arn
       Events:
         Schedule:
           Type: Schedule # More info about Schedule Event Source: https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/sam-property-statemachine-schedule.html

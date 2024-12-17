@@ -53,7 +53,7 @@
         },
         {
           "Variable": "$.status",
-          "StringEquals": "failure",
+          "StringMatches": "fail*",
           "Next": "FailState"
         }
       ],
@@ -145,20 +145,30 @@
         {
           "Variable": "$.DBType",
           "StringEquals": "Aurora",
-          "Next": "DeleteStgRDS"
+          "Next": "DeleteStgClusterInstance"
         },
         {
           "Variable": "$.DBType",
           "StringEquals": "RDS",
-          "Next": "DeleteStgCluster"
+          "Next": "DeleteStgRDS"
         }
       ]
+    },
+    "DeleteStgClusterInstance": {
+      "Type": "Task",
+      "ResultPath": null,
+      "Parameters": {
+        "DbInstanceIdentifier.$": "$.StgDbInstanceId",
+        "SkipFinalSnapshot": true
+      },
+      "Next": "DeleteStgCluster",
+      "Resource": "arn:aws:states:::aws-sdk:rds:deleteDBInstance"
     },
     "DeleteStgCluster": {
       "Type": "Task",
       "ResultPath": null,
       "Parameters": {
-        "DBClusterIdentifier.$": "$.StageDB",
+        "DbClusterIdentifier": "$.StageDB",
         "SkipFinalSnapshot": true
       },
       "Next": "OutputMaskedSnapshot",
