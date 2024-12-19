@@ -20,6 +20,10 @@ The Step Functions workflow orchestrates tasks by invoking AWS lambda functions 
 
 ## Prerequisites
 
+
+
+Refer to the [DataMasque Documentation] (https://datamasque.com/portal/documentation/2.24.0/state-machine-execution.html) for detailed information on the permissions required for the DataMasque EC2 instance to initiate this automation through the `automation` UI.
+
 Before triggering the workflow, you must create two secrets:
 	1.	DataMasque Instance Secret: Contains authentication details for connecting to the DataMasque instance to execute masking APIs.
 	2.	Database Connection Secret: Contains connection details for the database you want to mask.
