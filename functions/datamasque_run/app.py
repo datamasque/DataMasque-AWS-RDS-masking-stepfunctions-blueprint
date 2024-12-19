@@ -155,7 +155,10 @@ def create_connection(base_url: str, token: str, secret: dict, dm_ruleset_id: st
             print(
                 f"Invalid value for engine parameter in secret, valid values are: {valid_engine_type}"
             )
-            return None
+            return {
+                "status": "failure",
+                "error": f"Invalid value for engine parameter in secret, valid values are: {valid_engine_type}",
+            }
         print("All required parameters exist in the secret!")
         api = "api/connections/"
         staging_db_id = secret["host"].split(".")
@@ -183,6 +186,7 @@ def create_connection(base_url: str, token: str, secret: dict, dm_ruleset_id: st
         ]:
             conn_dict["connection_fileset"] = secret["connection_fileset"]
         # test connection before creating it.
+
         test_response = requests.post(
             base_url + api + "test/", json=conn_dict, headers=token, verify=False
         )
@@ -235,7 +239,7 @@ def create_connection(base_url: str, token: str, secret: dict, dm_ruleset_id: st
                 }
         else:
             print(
-                "Connection test failed, please verify the connection parameters provided in secrets manager."
+                f"Connection test failed, please verify following connection parameters provided in secrets manager {json.dump(conn_dict)} ."
             )
             return {
                 "status": "failure",

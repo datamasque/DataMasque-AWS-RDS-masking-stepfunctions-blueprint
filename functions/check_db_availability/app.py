@@ -22,7 +22,7 @@ def lambda_handler(event, context):
                 DBInstanceIdentifier=db_identifier,
             )
             db_instance = db_response["DBInstances"][0]
-            db_status = db_instance["StgDbInstanceStatus"].lower()
+            db_status = db_instance["DBInstanceStatus"].lower()
 
             response = {
                 "status": db_status,

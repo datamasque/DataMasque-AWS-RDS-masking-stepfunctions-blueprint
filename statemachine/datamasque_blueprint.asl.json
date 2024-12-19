@@ -168,7 +168,7 @@
       "Type": "Task",
       "ResultPath": null,
       "Parameters": {
-        "DbClusterIdentifier": "$.StageDB",
+        "DbClusterIdentifier.$": "$.StageDB",
         "SkipFinalSnapshot": true
       },
       "Next": "OutputMaskedSnapshot",

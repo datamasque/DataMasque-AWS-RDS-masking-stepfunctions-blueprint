@@ -58,9 +58,6 @@ def lambda_handler(event, context):
         parameters = {
             "DBSnapshotIdentifier": db_snapshot_identifier,
             "DBInstanceIdentifier": db_instance_identifier + "-datamasque",
-            "DBInstanceClass": event.get(
-                "DBInstanceClass", "db.r5.large"
-            ),  # Default class
             "AvailabilityZone": event.get("PreferredAZ"),
             "DBSubnetGroupName": cluster["DBSubnetGroup"],
             "DBClusterParameterGroupName": cluster["DBClusterParameterGroup"],
@@ -72,6 +69,9 @@ def lambda_handler(event, context):
         instance_response = client.describe_db_instances(
             DBInstanceIdentifier=cluster["DBClusterMembers"][0]["DBInstanceIdentifier"],
         )
+        parameters["DBInstanceClass"] = instance_response["DBInstances"][0][
+            "DBInstanceClass"
+        ]
         parameters["DBParameterGroupName"] = instance_response["DBInstances"][0][
             "DBParameterGroups"
         ][0]["DBParameterGroupName"]

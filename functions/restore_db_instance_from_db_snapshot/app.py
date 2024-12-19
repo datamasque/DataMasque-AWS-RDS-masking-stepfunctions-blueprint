@@ -1,9 +1,12 @@
+import os
+
 import boto3
 
 
 def lambda_handler(event, context):
 
     client = boto3.client("rds")
+    vpc_sg = os.environ["DATANASQUE_SG"]
 
     try:
         if event["DBType"] == "RDS":
@@ -16,7 +19,7 @@ def lambda_handler(event, context):
                 DBSubnetGroupName=event["parameters"]["DBSubnetGroupName"],
                 OptionGroupName=event["parameters"]["OptionGroupName"],
                 DBParameterGroupName=event["parameters"]["DBParameterGroupName"],
-                VpcSecurityGroupIds=event["parameters"]["VpcSecurityGroupIds"],
+                VpcSecurityGroupIds=[vpc_sg],
                 DeletionProtection=event["parameters"]["DeletionProtection"],
             )
             event["status"] = "success"
@@ -31,7 +34,7 @@ def lambda_handler(event, context):
                 Engine=event["parameters"]["Engine"],
                 EngineMode=event["parameters"]["EngineMode"],
                 DBSubnetGroupName=event["parameters"]["DBSubnetGroupName"],
-                VpcSecurityGroupIds=event["parameters"]["VpcSecurityGroupIds"],
+                VpcSecurityGroupIds=[vpc_sg],
                 DeletionProtection=False,
             )
             event["status"] = "success"

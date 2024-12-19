@@ -123,11 +123,11 @@ def delete_connection(base_url, token, conn_id):
     """
 
     api = f"/api/connections/{conn_id}/"
-
-    response = requests.get(base_url + api, headers=token, verify=False)
+    print(f"Deleting temporary connection - {conn_id}")
+    response = requests.delete(base_url + api, headers=token, verify=False)
     print(response)
-    print(response.json())
-    return response.json()
+    # print(response.json())
+    # return response.json()
 
 
 def lambda_handler(event, context):
@@ -156,7 +156,7 @@ def lambda_handler(event, context):
         event["MaskRunStatus"] = run_response["status"]
         if "fail" in run_response["status"]:
             event["Error"] = f"MaskRunId {event['MaskRunId']} has failed"
-        if event["MaskRunStatus"] == "complete":
+        if event["MaskRunStatus"] == "finished":
             conn_id = run_response["connection"]
             delete_connection(base_url, token, conn_id)
         print(json.dumps(event))
