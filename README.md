@@ -2,7 +2,7 @@
 
 ## Introduction
 
-The DataMasque AWS RDS Masking Blueprint provides a reusable data provisioning pipeline using AWS Step Functions and DataMasque APIs. These AWS CloudFormation-based templates are designed to automate the masking of production RDS Databases, creating masked snapshots that are safe for use in non-production environments. This workflow can also be triggered directly from the DataMasque UI.
+The DataMasque AWS RDS Masking Blueprint provides a reusable masked data provisioning pipeline using AWS Step Functions and DataMasque APIs. These AWS CloudFormation-based templates are designed to automate the masking of production RDS Databases, creating masked snapshots that are safe for use in non-production environments. This workflow can also be triggered directly from the DataMasque UI.
 
 The diagram below illustrates the reference architecture for DataMasque in AWS. The provided CloudFormation template automates the process of masking production RDS snapshots and generating masked RDS snapshots for provisioning non-production databases. These automated steps are highlighted in blue in the diagram.
 Please refer to [DataMasque AWS Service Catalog Template](https://github.com/datamasque/DataMasque-AWS-service-catalog-database-provisioning-blueprint) to use AWS Service Catalog product as an End User Interface to provision non-production databases using masked RDS snapshots.
@@ -16,7 +16,7 @@ The CloudFormation template deploys the following AWS resources:
 	•	Five AWS Lambda functions.
 	•	IAM roles for the Step Functions workflow and Lambda functions.
 
-The Step Functions workflow orchestrates tasks by invoking AWS lambda functions and DataMasque masking APIs. It irreversibly replaces sensitive data, such as PII, PCI, and PHI, with realistic, functional, and consistent masked values based on rulsets provided in the run. 
+The Step Functions workflow orchestrates tasks by invoking AWS lambda functions and DataMasque masking APIs. It irreversibly replaces sensitive data, such as PII, PCI, and PHI, with realistic, functional, and consistent masked values based on rulsets provided for the masking run. 
 
 ## Prerequisites
 
@@ -47,7 +47,7 @@ The secret should include the following details for the database to be masked:
   "host": "dtq-of-datamasque-2b-02-aurora-cluster.cluster-xxxx.ap-southeast-2.rds.amazonaws.com",
   "port": "5432",
   "dbname": "postgres",
-  "schema": "Amit"
+  "schema": "Prod"
 }
 ```
 
@@ -63,7 +63,7 @@ Optional Database-Specific Parameters
 	•	service_name: Applicable for Oracle connections.
 	•	connection_fileset: Used for MySQL and MariaDB connections.
 
-	Note: Secrets must reside in the same AWS account where the DataMasque instance is deployed.
+Note: Secrets must reside in the same AWS account where the DataMasque instance is deployed.
 
 
 ##Workflow Execution
@@ -261,7 +261,6 @@ KMS. [Changing a key policy](https://docs.aws.amazon.com/kms/latest/developergui
 
 The masked snapshot can be shared with the following methods:
 
-- Add an RDS modify db snapshot step to the lambda function.
 - Use the native mechanism within the AWS Console.
 - Use an existing CI/CD pipeline to copy and re-encrypt the snapshot.
 
