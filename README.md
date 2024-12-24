@@ -9,7 +9,7 @@ Please refer to [DataMasque AWS Service Catalog Template](https://github.com/dat
 
 ![Reference deployment](reference_deployment.png "Reference deployment")
 
-###AWS Resources Provisioned
+## AWS Resources Provisioned
 
 The CloudFormation template deploys the following AWS resources:
 	•	An AWS Step Functions workflow.
@@ -22,7 +22,7 @@ The Step Functions workflow orchestrates tasks by invoking AWS lambda functions 
 
 
 
-Refer to the [DataMasque Documentation] (https://datamasque.com/portal/documentation/2.24.0/state-machine-execution.html) for detailed information on the permissions required for the DataMasque EC2 instance to initiate this automation through the `automation` UI.
+Refer to the [DataMasque Documentation](https://datamasque.com/portal/documentation/2.24.0/state-machine-execution.html) for detailed information on the permissions required for the DataMasque EC2 instance to initiate this automation through the `automation` UI.
 
 Before triggering the workflow, you must create two secrets:
 	1.	DataMasque Instance Secret: Contains authentication details for connecting to the DataMasque instance to execute masking APIs.
@@ -33,7 +33,7 @@ Before triggering the workflow, you must create two secrets:
 The secret’s name must start with `datamasque/` and end with `connections`. For example:
 /datamasque/usersdb/postgres_connections.
 
-##Required Key-Value Pairs in the Database Connection Secret
+## Required Key-Value Pairs in the Database Connection Secret
 The secret should include the following details for the database to be masked:
 
 The secret should include the following details for the database to be masked:
@@ -66,7 +66,7 @@ Optional Database-Specific Parameters
 Note: Secrets must reside in the same AWS account where the DataMasque instance is deployed.
 
 
-##Workflow Execution
+## Workflow Execution
 
 Once the secrets are created, the workflow can be triggered from the DataMasque UI by providing:
 	•	The Database Secret Identifier created above.
