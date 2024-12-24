@@ -2,25 +2,91 @@
 
 ## Introduction
 
-DataMasque AWS blueprint templates are written in AWS CloudFormation format. The purpose of this template is to create a reusable data provisioning pipeline that calls DataMasque APIs to produce masked data that's safe for consumption in non-production environment.
+The DataMasque AWS RDS Masking Blueprint provides a reusable masked data provisioning pipeline using AWS Step Functions and DataMasque APIs. These AWS CloudFormation-based templates are designed to automate the masking of production RDS Databases, creating masked snapshots that are safe for use in non-production environments. This workflow can also be triggered directly from the DataMasque UI.
 
-The diagram below describes the DataMasque reference architecture in AWS.  This CloudFormation template is used to mask production RDS snapshots, create masked RDS snapshots which can be used to provision non-production databases - this incorporates the automation steps highlighted in blue.  Please refer to [DataMasque AWS Service Catalog Template](https://github.com/datamasque/DataMasque-AWS-service-catalog-database-provisioning-blueprint) to use AWS Service Catalog product as an End User Interface to provision non-production databases using masked RDS snapshots.
+The diagram below illustrates the reference architecture for DataMasque in AWS. The provided CloudFormation template automates the process of masking production RDS snapshots and generating masked RDS snapshots for provisioning non-production databases. These automated steps are highlighted in blue in the diagram.
+Please refer to [DataMasque AWS Service Catalog Template](https://github.com/datamasque/DataMasque-AWS-service-catalog-database-provisioning-blueprint) to use AWS Service Catalog product as an End User Interface to provision non-production databases using masked RDS snapshots.
 
 ![Reference deployment](reference_deployment.png "Reference deployment")
 
-The following lists the main AWS resources provisioned when this CloudFormation template is deployed:
+## AWS Resources Provisioned
 
-- An AWS stepfunction.
-- Five (5) AWS Lambda functions.
-- A SQS queue.
-- A CloudWatch event rule to schedule the Step Function execution once a week.
+The CloudFormation template deploys the following AWS resources:
+- An AWS Step Functions workflow.
+- Five AWS Lambda functions.
+- IAM roles for the Step Functions workflow and Lambda functions.
 
-The provisioned stepfunctions coordinates tasks by calling AWS components/services and DataMasque masking APIs to
-irreversibly replaces sensitive data such as PII, PCI and PHI with realistic, functional and consistent values.
+The Step Functions workflow orchestrates tasks by invoking AWS lambda functions and DataMasque masking APIs. It irreversibly replaces sensitive data, such as PII, PCI, and PHI, with realistic, functional, and consistent masked values based on rulsets provided for the masking run. 
 
-You can trigger a data masking workflow by providing a RDS identifier to invoke execution of the deployed stepfunctions.
-Upon completing the data masking workflow, an encrypted and masked RDS snapshot is produced, ready to be used to
-provision non-production databases.
+## Prerequisites
+
+
+
+Refer to the [DataMasque Documentation](https://datamasque.com/portal/documentation/2.24.0/state-machine-execution.html) for detailed information on the permissions required for the DataMasque EC2 instance to initiate this automation through the `automation` UI.
+
+Before triggering the workflow, you must create two secrets:
+	1.	DataMasque Instance Secret: Contains authentication details for connecting to the DataMasque instance to execute masking APIs.
+	2.	Database Connection Secret: Contains connection details for the database you want to mask.
+
+##Database Connection Secret Naming Convention
+
+The secret’s name must start with `datamasque/` and end with `connections`. For example:
+/datamasque/usersdb/postgres_connections.
+
+## Required Key-Value Pairs in the Database Connection Secret
+The secret should include the following details for the database to be masked:
+
+The secret should include the following details for the database to be masked:
+
+
+```json
+{
+  "username": "postgres",
+  "password": "xxxxx",
+  "engine": "postgres",
+  "host": "dtq-of-datamasque-2b-02-aurora-cluster.cluster-xxxx.ap-southeast-2.rds.amazonaws.com",
+  "port": "5432",
+  "dbname": "postgres",
+  "schema": "Prod"
+}
+```
+
+- username: Database username for the staged database.
+- password: Password for the provided username.
+- engine: The database engine (e.g., postgres).
+- host: RDS/Aurora endpoint of the source database (DataMasque connects to the staged database, not the source).
+- port: Port number of the database.
+- dbname: Name of the database.
+- schema: Schema name for the masking job.
+
+Optional Database-Specific Parameters
+service_name: Applicable for Oracle connections.
+connection_fileset: Used for MySQL and MariaDB connections.
+
+Note: Secrets must reside in the same AWS account where the DataMasque instance is deployed.
+
+
+## Workflow Execution
+
+Once the secrets are created, the workflow can be triggered from the DataMasque UI by providing:
+- The Database Secret Identifier created above.
+- The deployed Step Function.
+- The Source RDS/Aurora Cluster Identifier.
+- The DataMasque Ruleset for the masking job.
+- Optional PreferredAZ parameter to deploy the staged DB in a specific AZ. To save data transfer costs the staged RDS instance by default  gets created in same AZ where DataMasque ec2 instance is running.
+
+
+Workflow Execution Steps
+- Selects the latest available snapshot of the source database. If none exist, it creates a new snapshot.
+- Restores an RDS instance or Aurora cluster from the snapshot in the same AWS account.
+- Creates a temporary DataMasque connection to the staged database.
+- Executes the masking job using the specified ruleset.
+- Generates a masked snapshot of the staged database.
+- Removes the temporary connection and deletes the staged database.
+
+	Note: If the Step Function execution fails, the staged database must be manually deleted if it got created by the automation.
+
+Upon successful completion, a masked RDS snapshot is produced, ready for provisioning non-production databases.
 
 ## Network
 
@@ -31,17 +97,17 @@ this template) and the staging RDS instance (provisioned by this template).
 
 ## Deployment
 
-### Prerequisites
+## Prerequisites
 
-- AWS CLI configured with appropriate credential for the target AWS account.
-- AWS SAM
+- AWS CLI: configured with appropriate credential for the target AWS account.
+- AWS SAM:
   CLI: https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/serverless-sam-cli-install.html
-- Python runtime 3.9 installed.
-- A DataMasque instance.
-- Source database with automated snapshots enabled.
-- DataMasque `connection id` and `ruleset id`.
+- Python 3.9 Runtime: Installed locally.
+- DataMasque Instance: Ensure it is configured with a security group that allows outbound connections to RDS instances on required ports.
+- Secrets: Authentication information for connecting to the DataMasque instance.
+- Security Group (ID): The SG with inbound rules allowing the DataMasque instance to connect to the staged database. The automation attaches the SG to the restored staged database.
 
-### Step-by-step
+## Step-by-step
 
 ###### Store the DataMasque instance credentials on AWS Secrets Manager.
 
@@ -56,11 +122,11 @@ Make sure you have created a secret with the following keys and values:
 | Parameter                                                                                                              | Description                                                                                                                    |
 |------------------------------------------------------------------------------------------------------------------------|--------------------------------------------------------------------------------------------------------------------------------|
 | VpcId                                                                                                                  | VPC ID where the lambdas will be deployed.                                                                                     |
-| SubnetIds                                                                                                              | List of Subnet IDs where the lambdas will be deployed.  <br> The AWS Lambdas provisioned by this template will be placed on **private subnet** inside a VPC. It's recommended to provide at least two **SubnetIds** for redundancy and availability. |                                                                                                                                |
+| SubnetIds                                                                                                              | List of Subnet IDs where the lambdas will be deployed.  <br> It's recommended to provide at least two **SubnetIds** for redundancy and availability. |                                                                                                                                |
 | DatamasqueBaseUrl                                                                                                      | DataMasque instance URL with the EC2's private IP, i.e. https://\<ec2-instance-private-ip>.                                    |
 | DatamasqueSecretArn                                                                                                    | Secret with DataMasque instance credentials.                                                                                   |
-| DatamasqueConnectionId                                                                                                 | DataMasque connection ID.                                                                                                      |
-| DatamasqueRuleSetId                                                                                                    | DataMasque rulset ID.                                                                                                          |
+| DataMasqueSecurityGroup                                                                                                 | The Security Group ID that allows DataMasque instance to connect o to RDS ID.                                                                                                      |
+|
 
 ###### Follow the steps to deploy the CloudFormation Stack:
 
@@ -76,26 +142,24 @@ An example of the configuration file is presented below:
 
 ```ini
 version = 0.1
-[default]
-[default.deploy]
-[default.deploy.parameters]
-stack_name = "datamasque-blueprint"
-s3_bucket = "aws-sam-cli-managed-default-samclisourcebucket-xxxxxxxxx"
-s3_prefix = "datamasque-blueprint"
+[dtq.deploy.parameters]
+stack_name = "dm-masking-blueprint"
+resolve_s3 = true
+s3_prefix = "dm-masking-blueprint"
 region = "ap-southeast-2"
+profile = "datamasque-dtq"
+confirm_changeset = true
 capabilities = "CAPABILITY_IAM"
+disable_rollback = true
+parameter_overrides = "DataMasqueSecurityGroup=\"sg-xxxxxxxxxxxx\" VpcId=\"vpc-XXXXXXXXXXXXXXX\" DatamasqueSecretArn=\"arn:aws:secretsmanager:region:11111111111111:secret:dm/credentials-Jqufnp\" SubnetIds=\"subnet-XXXXXXXXXXX,subnet-XXXXXXXXXXXX\" DatamasqueBaseUrl=\"https://10.90.6.14/\""
 image_repositories = []
-
-parameter_overrides = "VpcId=\"vpc-xxxxxxxx\" SubnetIds=\"subnet-xxxxxxxxxxxxx\" DatamasqueBaseUrl=\"https://10.11.12.13/\" DatamasqueSecretArn=\"xxxxxxxx\"  DatamasqueConnectionId=\"41xxxxxe7-fxxd-xxx5-8xxe-62xxxxxxxxe62\" DatamasqueRuleSetId=\"2bxxxxxxxb-3xxc-4xxe-axxxb-c35xxxxxxxx40\""
 
 ```
 
 ###### Please ensure the following network connectivities are configured after deploying the CloudFormation Stack:
 
-- The source RDS DB instance **must** allow inbound connections from the DataMasque EC2 instance. The configuration will
-  be replicated when creating the staging RDS.
+- The Security group ID provided to parameter DataMasqueSecurityGroup  **must** allow inbound connections from the DataMasque EC2 instance on required port/s. This Security group is attached to the staged database by automation.
 - The DataMasque EC2 instance **must** allow inbound connections from the **DatamasqueRun** Lambda.
-- The DataMasque EC2 instance **must** allow inbound connections from the **SqsConsumer** Lambda.
 - Grant permissions for the stepfunctions and lambda functions to use the KMS key configured on the source database to encrypt masked snapshots if you are not using the default RDS key.  Note: this template assumes the source database uses default RDS KMS keyas every organization might have different key configuration standard.
 
 ## AWS Step Function execution
@@ -106,7 +170,10 @@ You can also execute the step function manually.
 
 ```JSON
 {
-  "DBInstanceIdentifier": "source-postgres-rds"
+  "DBInstanceIdentifier": "demo-oracle-datamasque-03-rds",
+  "DBSecretIdentifier": "arn:aws:secretsmanager:ap-southeast-2:897875381524:secret:datamasque/demo/oracle_connections-TpvoiO",
+  "DataMasqueRulesetId": "4f115c49-43bb-4cbc-a5b8-55a5aa9509e0",
+  "PreferredAZ": "ap-southeast-2b"
 }
 ```
 
@@ -114,29 +181,33 @@ You can also execute the step function manually.
 
 The AWS SAM template creates a CloudWatch event rule that schedules a Step Function execution once a week which is
 disabled by default. To use this scheduling functionality, you will need edit the rule to specify your target
-DBInstanceIdentifier and enable the CloudWatch event rule.
+DBInstanceIdentifier along with other required parameters and enable the CloudWatch event rule.
 
 ```YAML
-Events:
-  Schedule:
-    Type: Schedule # More info about Schedule Event Source: https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/sam-property-statemachine-schedule.html
-    Properties:
-      Description: Schedule to run the DATAMASQUE state machine weekly
-      Enabled: False
-      Schedule: "rate(7 days)"
-      Input: '{"DBInstanceIdentifier": "source-postgres-rds"}'
+    Events:
+      Schedule:
+        Type: Schedule # More info about Schedule Event Source: https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/sam-property-statemachine-schedule.html
+        Properties:
+          Description: Schedule to run the DATAMASQUE state machine weekly
+          Enabled: False
+          Schedule: "rate(7 days)"
+          Input: '{
+            "DBInstanceIdentifier": "demo-oracle-datamasque-03-rds",
+            "DBSecretIdentifier": "arn:aws:secretsmanager:ap-southeast-2:123456789:secret:datamasque/demo/oracle_connections-TpvoiO",
+            "DataMasqueRulesetId": "4f115c49-43bb-4cbc-a5b8-55a5aa9509e0",
+            "PreferredAZ": "ap-southeast-2b"
+            }'
 
 ```
 
 ###### Notes:
 
-- The staging RDS instance created will follow the same RDS endpoint name schema as the source database with
-  a `-datamasque` postfix after the DBInstanceIdentifier:
+- The staging RDS instance created will have `datamasque` postfix after the DBInstanceIdentifier:
 
 | RDS database         | Endpoint                                                                    |
 |----------------------|-----------------------------------------------------------------------------|
 | Source RDS instance  | ``source-postgres-rds``.xxxxxxxxxx.ap-southeast-2.rds.amazonaws.com         |
-| Staging RDS instance | ``staging-postgres-datamasque``.xxxxxxxxxx.ap-southeast-2.rds.amazonaws.com |
+| Staging RDS instance | ``source-postgres-rds-datamasque``.xxxxxxxxxx.ap-southeast-2.rds.amazonaws.com |
 
 - The RDS username, password and connection port will be the same as the source RDS instance.
 
@@ -150,17 +221,31 @@ Events:
 
 The following table describes the states and details of the step function definition.
 
-| Step                     | Description                                                           |
-|--------------------------|-----------------------------------------------------------------------|
-| Describe DB Snapshots    | Fetch the latest snapshot of the target RDS instance.                 |
-| Describe DB Instances    | Fetch the configuration of the target RDS instance.                   |
-| Restore DB from Snapshot | Restore the snapshot using the appropriate configuration.             |
-| Wait for DB Instance     | Wait for the instance to be available.                                |
-| Datamasque API run       | Create a masking job base don the connection id and ruleset provided. |
-| SQS SendMessage          | Send a message to a queue to wait until the job is finished.          |
-| CreateDBSnapshot         | Create a snapshot of the staging RDS db instance.                     |
-| Wait for Snapshot        | Wait for the DB Snapshot to be available.                             |
-| DeleteDBInstance         | Delete the staging RDS db instance.                                   |
+
+| Step                          | Description                                                                                 |
+|-------------------------------|---------------------------------------------------------------------------------------------|
+| Describe DB Snapshots         | Fetch the latest snapshot of the source RDS instance and create if none exists.            |
+| CheckSnapshotStatus           | Choice step to check the status of selected source RDS snapshot.                           |
+| WaitforSnapshot               | 120 seconds wait step before checking the status of source RDS snapshot if not in `available` state. |
+| Describe DB Instances         | Captures configuration of source RDS instance to be masked.                                      |
+| Restore DB from Snapshot      | Restores the source RDS snapshot with the same configuration as the source RDS.            |
+| CheckDBAvailability           | Checks the status of the stage RDS instance to ensure it's available after the restore.    |
+| IsDBAvailable                 | Choice step to check if the restored stage database is in an available state.              |
+| WaitBeforeRetry               | Wait step of 60 seconds before retrying the `CheckDBAvailability` step.                    |
+| FailState                     | Common `Fail` step referenced by multiple steps if a failure is encountered during execution. |
+| Datamasque API run            | Executes the DataMasque masking run on the staging database.                               |
+| IsMaskRunComplete             | Choice step to check the status of the masking run.                                        |
+| MaskingRunInProgress          | Wait step of 60 seconds before checking the masking run status again.                      |
+| CheckMaskingRunStatus         | Step to check the status of the masking run.                                               |
+| CreateDBSnapshot              | Step to create a snapshot of the masked staging database.                                  |
+| CheckMaskedSnapshotStatus     | Choice step to check the status of the masked snapshot.                                    |
+| WaitforMaskedSnapshot         | Wait step of 60 seconds before checking the status of the masked snapshot.                 |
+| DeleteStageDBChoice           | Choice step to decide whether to delete the cluster or instance based on the source database type. |
+| DeleteStgClusterInstance      | Step to delete the database instance that is part of the staged Aurora cluster.            |
+| DeleteStgCluster              | Step to delete the staged Aurora cluster.                                                 |
+| DeleteStgRDS                  | Step to delete the staged database instance if the source database is an RDS instance.     |
+| OutputMaskedSnapshot          | Step to display the ARN of the masked snapshot.                                            |
+
 
 ![AWS Step Function definition](stepfunction.png "AWS Step Function")
 
@@ -176,10 +261,9 @@ KMS. [Changing a key policy](https://docs.aws.amazon.com/kms/latest/developergui
 
 The masked snapshot can be shared with the following methods:
 
-- Add an RDS modify db snapshot step to the lambda function.
 - Use the native mechanism within the AWS Console.
 - Use an existing CI/CD pipeline to copy and re-encrypt the snapshot.
 
 ## Planned improvements
 
-- Create the DataMasque connection with the staging RDS instance dynamically.
+- Enable support for RDS instances hosted in a different AWS account from the one where the DataMasque instance is deployed.

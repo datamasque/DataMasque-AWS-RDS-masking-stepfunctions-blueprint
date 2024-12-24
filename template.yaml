@@ -11,78 +11,19 @@ Parameters:
   DatamasqueBaseUrl:
     Type: String
     Description: DATAMASQUE instance URL.
-  DatamasqueConnectionId:
-    Type: String
-    Description: DATAMASQUE connection ID.
-  DatamasqueRuleSetId:
-    Type: String
-    Description: DATAMASQUE Rule Set ID.
   DatamasqueSecretArn:
     Type: String
     Description: AWS secret for DATAMASQUE instance credentials.
+  DataMasqueSecurityGroup:
+    Type: String
+    Description: Security Group ID for connectivity between Staged DB and DM instance.
 
 Resources:
-
-  RestoreDBInstanceFromSnapshotSQS:
-    Type: AWS::SQS::Queue
-    Properties:
-      MessageRetentionPeriod: 300
-
-  DatamasqueBlueprintSQS:
-    Type: AWS::SQS::Queue
-    Properties:
-      MessageRetentionPeriod: 300
-
-  SqsConsumerSg:
-    Type: AWS::EC2::SecurityGroup
-    Properties:
-      GroupDescription: DATAMASQUE blueprint SQS consumer Lambda security group
-      VpcId: 
-        Ref: VpcId
-
-  SqsConsumer:
-    Type: AWS::Serverless::Function
-    Properties:
-      CodeUri: functions/sqs_consumer/
-      Handler: app.lambda_handler
-      Runtime: python3.9
-      Timeout: 10
-      Architectures:
-        - x86_64
-      Events:
-        DatamasqueApiSQSEvent:
-          Type: SQS
-          Properties:
-            Queue: !GetAtt DatamasqueBlueprintSQS.Arn
-            BatchSize: 1
-      Policies:
-        - VPCAccessPolicy: {}
-        - AWSSecretsManagerGetSecretValuePolicy:
-            SecretArn: !Ref DatamasqueSecretArn
-        - SQSSendMessagePolicy:
-            QueueName: !GetAtt DatamasqueBlueprintSQS.QueueName
-        - Statement:
-          - Action:
-            - states:SendTaskSuccess
-            - states:SendTaskFailure
-            Effect: Allow
-            Resource: !GetAtt DatamasqueBluepringStateMachine.Arn
-      VpcConfig:
-        SubnetIds:
-          Ref: SubnetIds
-        SecurityGroupIds:
-          - Ref: SqsConsumerSg
-      Environment:
-        Variables:
-          DATANASQUE_BASE_URL: !Ref DatamasqueBaseUrl
-          DATAMASQUE_SECRET_ARN: !Ref DatamasqueSecretArn
-          SQS_URL: !Ref DatamasqueBlueprintSQS
-
   DatamasqueRunSg:
     Type: AWS::EC2::SecurityGroup
     Properties:
       GroupDescription: DATAMASQUE blueprint API run Lambda security group
-      VpcId: 
+      VpcId:
         Ref: VpcId
 
   DatamasqueRun:
@@ -98,6 +39,13 @@ Resources:
         - VPCAccessPolicy: {}
         - AWSSecretsManagerGetSecretValuePolicy:
             SecretArn: !Ref DatamasqueSecretArn
+        - AWSSecretsManagerGetSecretValuePolicy:
+            SecretArn: arn:aws:secretsmanager:ap-southeast-2:897875381524:secret:ae-demo/dm/connections-1d2iUw
+        - AWSSecretsManagerGetSecretValuePolicy:
+            SecretArn: !Sub "arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:datamasque/*connections*"
+        - AWSSecretsManagerGetSecretValuePolicy:
+            SecretArn: arn:aws:secretsmanager:ap-southeast-2:897875381524:secret:ae-demo/dm/ae-pg-connections-XXpKxx
+
       VpcConfig:
         SubnetIds:
           Ref: SubnetIds
@@ -106,10 +54,8 @@ Resources:
       Environment:
         Variables:
           DATANASQUE_BASE_URL: !Ref DatamasqueBaseUrl
-          DATAMASQUE_CONNECTION_ID: !Ref DatamasqueConnectionId
-          DATAMASQUE_RULESET_ID: !Ref DatamasqueRuleSetId
           DATAMASQUE_SECRET_ARN: !Ref DatamasqueSecretArn
-  
+
   DescribeDBInstances:
     Type: AWS::Serverless::Function # More info about Function Resource: https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/sam-resource-function.html
     Properties:
@@ -133,7 +79,14 @@ Resources:
         - x86_64
       Policies:
         - AmazonRDSReadOnlyAccess
-  
+        - Statement:
+            - Action:
+                - rds:CreateDBSnapshot
+                - rds:CreateDBClusterSnapshot
+                - rds:AddTagsToResource
+              Effect: Allow
+              Resource: "*"
+
   RestoreDBInstanceFromSnapshot:
     Type: AWS::Serverless::Function # More info about Function Resource: https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/sam-resource-function.html
     Properties:
@@ -141,48 +94,97 @@ Resources:
       Handler: app.lambda_handler
       Runtime: python3.9
       Timeout: 10
+      Environment:
+        Variables:
+          DATANASQUE_SG: !Ref DataMasqueSecurityGroup
       Architectures:
         - x86_64
       Policies:
         - AmazonRDSReadOnlyAccess
         - Statement:
-          - Action:
-            - iam:PassRole
-            - rds:AddTagsToResource
-            - rds:RestoreDBInstanceFromDBSnapshot
-            Effect: Allow
-            Resource: "*"
+            - Action:
+                - iam:PassRole
+                - rds:AddTagsToResource
+                - rds:RestoreDBInstanceFromDBSnapshot
+                - rds:RestoreDBClusterFromSnapshot
+              Effect: Allow
+              Resource: "*"
 
-  WaitRestoreDBInstanceFromSnapshot:
+  CheckDBAvailability:
     Type: AWS::Serverless::Function # More info about Function Resource: https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/sam-resource-function.html
     Properties:
-      CodeUri: functions/wait_restore_db_instance_from_db_snapshot/
+      CodeUri: functions/check_db_availability/
       Handler: app.lambda_handler
       Runtime: python3.9
       Timeout: 10
       Architectures:
         - x86_64
-      Events:
-        SQSEvent:
-          Type: SQS
-          Properties:
-            Queue: !GetAtt RestoreDBInstanceFromSnapshotSQS.Arn
-            BatchSize: 1
       Policies:
         - AmazonRDSReadOnlyAccess
-        - SQSSendMessagePolicy:
-            QueueName: !GetAtt RestoreDBInstanceFromSnapshotSQS.QueueName
         - Statement:
             - Action:
-                - states:SendTaskSuccess
-                - states:SendTaskFailure
+                - rds:AddTagsToResource
               Effect: Allow
-              Resource: !GetAtt DatamasqueBluepringStateMachine.Arn
+              Resource: "*"
+            - Action:
+                - rds:CreateDBInstance
+              Effect: Allow
+              Resource: "*"
+
+  CreateMaskedSnapshot:
+    Type: AWS::Serverless::Function # More info about Function Resource: https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/sam-resource-function.html
+    Properties:
+      CodeUri: functions/create_masked_snapshot/
+      Handler: app.lambda_handler
+      Runtime: python3.9
+      Timeout: 60
+      Architectures:
+        - x86_64
+      Policies:
+        - AmazonRDSReadOnlyAccess
+        - Statement:
+            - Action:
+                - rds:CreateDBSnapshot
+                - rds:CreateDBClusterSnapshot
+              Effect: Allow
+              Resource: "*"
+
+  CheckMaskedSnapshot:
+    Type: AWS::Serverless::Function # More info about Function Resource: https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/sam-resource-function.html
+    Properties:
+      CodeUri: functions/check_masked_snapshot/
+      Handler: app.lambda_handler
+      Runtime: python3.9
+      Timeout: 60
+      Architectures:
+        - x86_64
+      Policies:
+        - AmazonRDSReadOnlyAccess
+
+  CheckMaskingRunStatus:
+    Type: AWS::Serverless::Function # More info about Function Resource: https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/sam-resource-function.html
+    Properties:
+      CodeUri: functions/check_masking_run/
+      Handler: app.lambda_handler
+      Runtime: python3.9
+      Timeout: 20
+      Architectures:
+        - x86_64
+      Policies:
+        - VPCAccessPolicy: {}
+        - AWSSecretsManagerGetSecretValuePolicy:
+            SecretArn: !Ref DatamasqueSecretArn
+      VpcConfig:
+        SubnetIds:
+          Ref: SubnetIds
+        SecurityGroupIds:
+          - Ref: DatamasqueRunSg
       Environment:
         Variables:
-          SQS_URL: !Ref RestoreDBInstanceFromSnapshotSQS
+          DATANASQUE_BASE_URL: !Ref DatamasqueBaseUrl
+          DATAMASQUE_SECRET_ARN: !Ref DatamasqueSecretArn
 
-  DatamasqueBluepringStateMachine:
+  DatamasqueBlueprintStateMachine:
     Type: AWS::Serverless::StateMachine # More info about State Machine Resource: https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/sam-resource-statemachine.html
     Properties:
       DefinitionUri: statemachine/datamasque_blueprint.asl.json
@@ -191,8 +193,10 @@ Resources:
         DescribeDBSnapshotFunctionArn: !GetAtt DescribeDBSnapshot.Arn
         DescribeDBInstancesFunctionArn: !GetAtt DescribeDBInstances.Arn
         RestoreDBInstanceFromSnapshotFunctionArn: !GetAtt RestoreDBInstanceFromSnapshot.Arn
-        DatamasqueBlueprintSQSQueue: !Ref DatamasqueBlueprintSQS
-        RestoreDBInstanceFromSnapshotSQSQueue: !Ref RestoreDBInstanceFromSnapshotSQS
+        CheckDBAvailabilityArn: !GetAtt CheckDBAvailability.Arn
+        CheckMaskingRunStatus: !GetAtt CheckMaskingRunStatus.Arn
+        CreateMaskedSnapshot: !GetAtt CreateMaskedSnapshot.Arn
+        CheckMaskedSnapshot: !GetAtt CheckMaskedSnapshot.Arn
       Policies:
         - LambdaInvokePolicy:
             FunctionName: !Ref DescribeDBInstances
@@ -202,26 +206,40 @@ Resources:
             FunctionName: !Ref RestoreDBInstanceFromSnapshot
         - LambdaInvokePolicy:
             FunctionName: !Ref DatamasqueRun
+        - LambdaInvokePolicy:
+            FunctionName: !Ref CheckDBAvailability
+        - LambdaInvokePolicy:
+            FunctionName: !Ref CheckMaskingRunStatus
+        - LambdaInvokePolicy:
+            FunctionName: !Ref CreateMaskedSnapshot
+        - LambdaInvokePolicy:
+            FunctionName: !Ref CheckMaskedSnapshot
         - Statement:
-          - Action:
-            - rds:CreateDBSnapshot
-            - rds:DeleteDBInstance
-            Effect: Allow
-            Resource: "*"
-        - Statement:
-          - Action:
-            - sqs:SendMessage
-            Effect: Allow
-            Resource:
-              - !GetAtt DatamasqueBlueprintSQS.Arn
-              - !GetAtt RestoreDBInstanceFromSnapshotSQS.Arn
+            - Action:
+                - rds:DeleteDBInstance
+              Effect: Allow
+              Resource:
+                - !Sub "arn:aws:rds:${AWS::Region}:${AWS::AccountId}:db:*-datamasque"
+                - !Sub "arn:aws:rds:${AWS::Region}:${AWS::AccountId}:db:*-datamasque-1"
+            - Action:
+                - rds:DeleteDBCluster
+              Effect: Allow
+              Resource: !Sub "arn:aws:rds:${AWS::Region}:${AWS::AccountId}:cluster:*-datamasque"
+            - Action:
+                - rds:CreateDBSnapshot
+                - rds:CreateDBClusterSnapshot
+              Effect: Allow
+              Resource: "*"
       Events:
         Schedule:
           Type: Schedule # More info about Schedule Event Source: https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/sam-property-statemachine-schedule.html
           Properties:
             Description: Schedule to run the DATAMASQUE state machine weekly
-            Enabled: False 
+            Enabled: False
             Schedule: "rate(7 days)"
-            Input: '{"DBInstanceIdentifier": "source-postgres-rds"}'
-
-  
+            Input: '{
+              "DBInstanceIdentifier": "demo-oracle-datamasque-03-rds",
+              "DBSecretIdentifier": "arn:aws:secretsmanager:ap-southeast-2:123456789:secret:datamasque/demo/oracle_connections-TpvoiO",
+              "DataMasqueRulesetId": "4f115c49-43bb-4cbc-a5b8-55a5aa9509e0",
+              "PreferredAZ": "ap-southeast-2b"
+              }'
