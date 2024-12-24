@@ -12,9 +12,9 @@ Please refer to [DataMasque AWS Service Catalog Template](https://github.com/dat
 ## AWS Resources Provisioned
 
 The CloudFormation template deploys the following AWS resources:
-	•	An AWS Step Functions workflow.
-	•	Five AWS Lambda functions.
-	•	IAM roles for the Step Functions workflow and Lambda functions.
+- An AWS Step Functions workflow.
+- Five AWS Lambda functions.
+- IAM roles for the Step Functions workflow and Lambda functions.
 
 The Step Functions workflow orchestrates tasks by invoking AWS lambda functions and DataMasque masking APIs. It irreversibly replaces sensitive data, such as PII, PCI, and PHI, with realistic, functional, and consistent masked values based on rulsets provided for the masking run. 
 
@@ -51,17 +51,17 @@ The secret should include the following details for the database to be masked:
 }
 ```
 
-	•	username: Database username for the staged database.
-	•	password: Password for the provided username.
-	•	engine: The database engine (e.g., postgres).
-	•	host: RDS/Aurora endpoint of the source database (DataMasque connects to the staged database, not the source).
-	•	port: Port number of the database.
-	•	dbname: Name of the database.
-	•	schema: Schema name for the masking job.
+- username: Database username for the staged database.
+- password: Password for the provided username.
+- engine: The database engine (e.g., postgres).
+- host: RDS/Aurora endpoint of the source database (DataMasque connects to the staged database, not the source).
+- port: Port number of the database.
+- dbname: Name of the database.
+- schema: Schema name for the masking job.
 
 Optional Database-Specific Parameters
-	•	service_name: Applicable for Oracle connections.
-	•	connection_fileset: Used for MySQL and MariaDB connections.
+service_name: Applicable for Oracle connections.
+connection_fileset: Used for MySQL and MariaDB connections.
 
 Note: Secrets must reside in the same AWS account where the DataMasque instance is deployed.
 
@@ -69,20 +69,20 @@ Note: Secrets must reside in the same AWS account where the DataMasque instance 
 ## Workflow Execution
 
 Once the secrets are created, the workflow can be triggered from the DataMasque UI by providing:
-	•	The Database Secret Identifier created above.
-	•	The deployed Step Function.
-	•	The Source RDS/Aurora Cluster Identifier.
-	•	The DataMasque Ruleset for the masking job.
-  •	Optional PreferredAZ parameter to deploy the staged DB in a specific AZ. To save data transfer costs the staged RDS instance gets created in same AZ where DataMasque instance is running.
+- The Database Secret Identifier created above.
+- The deployed Step Function.
+- The Source RDS/Aurora Cluster Identifier.
+- The DataMasque Ruleset for the masking job.
+- Optional PreferredAZ parameter to deploy the staged DB in a specific AZ. To save data transfer costs the staged RDS instance by default  gets created in same AZ where DataMasque ec2 instance is running.
 
 
-Workflow Steps
-	1.	Selects the latest available snapshot of the source database. If none exist, it creates a new snapshot.
-	2.	Restores an RDS instance or Aurora cluster from the snapshot in the same AWS account.
-	3.	Creates a temporary DataMasque connection to the staged database.
-	4.	Executes the masking job using the specified ruleset.
-	5.	Generates a masked snapshot of the staged database.
-	6.	Removes the temporary connection and deletes the staged database.
+Workflow Execution Steps
+- Selects the latest available snapshot of the source database. If none exist, it creates a new snapshot.
+- Restores an RDS instance or Aurora cluster from the snapshot in the same AWS account.
+- Creates a temporary DataMasque connection to the staged database.
+- Executes the masking job using the specified ruleset.
+- Generates a masked snapshot of the staged database.
+- Removes the temporary connection and deletes the staged database.
 
 	Note: If the Step Function execution fails, the staged database must be manually deleted if it got created by the automation.
 
@@ -151,7 +151,7 @@ profile = "datamasque-dtq"
 confirm_changeset = true
 capabilities = "CAPABILITY_IAM"
 disable_rollback = true
-parameter_overrides = "DataMasqueSecurityGroup=\"sg-01b583d1b666cd0ec\" VpcId=\"vpc-XXXXXXXXXXXXXXX\" DatamasqueSecretArn=\"arn:aws:secretsmanager:region:89787538123456789012:secret:dm/credentials-Jqufnp\" SubnetIds=\"subnet-XXXXXXXXXXX,subnet-XXXXXXXXXXXX\" DatamasqueBaseUrl=\"https://10.90.6.14/\""
+parameter_overrides = "DataMasqueSecurityGroup=\"sg-xxxxxxxxxxxx\" VpcId=\"vpc-XXXXXXXXXXXXXXX\" DatamasqueSecretArn=\"arn:aws:secretsmanager:region:11111111111111:secret:dm/credentials-Jqufnp\" SubnetIds=\"subnet-XXXXXXXXXXX,subnet-XXXXXXXXXXXX\" DatamasqueBaseUrl=\"https://10.90.6.14/\""
 image_repositories = []
 
 ```
