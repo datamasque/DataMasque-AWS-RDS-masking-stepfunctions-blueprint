@@ -28,12 +28,12 @@ Before triggering the workflow, you must create two secrets:
 	1.	DataMasque Instance Secret: Contains authentication details for connecting to the DataMasque instance to execute masking APIs.
 	2.	Database Connection Secret: Contains connection details for the database you want to mask.
 
-###Database Connection Secret Naming Convention
+##Database Connection Secret Naming Convention
 
 The secret’s name must start with `datamasque/` and end with `connections`. For example:
 /datamasque/usersdb/postgres_connections.
 
-###Required Key-Value Pairs in the Database Connection Secret
+##Required Key-Value Pairs in the Database Connection Secret
 The secret should include the following details for the database to be masked:
 
 The secret should include the following details for the database to be masked:
@@ -97,7 +97,7 @@ this template) and the staging RDS instance (provisioned by this template).
 
 ## Deployment
 
-### Prerequisites
+## Prerequisites
 
 - AWS CLI: configured with appropriate credential for the target AWS account.
 - AWS SAM:
@@ -107,7 +107,7 @@ this template) and the staging RDS instance (provisioned by this template).
 - Secrets: Authentication information for connecting to the DataMasque instance.
 - Security Group (ID): The SG with inbound rules allowing the DataMasque instance to connect to the staged database. The automation attaches the SG to the restored staged database.
 
-### Step-by-step
+## Step-by-step
 
 ###### Store the DataMasque instance credentials on AWS Secrets Manager.
 
