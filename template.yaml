@@ -40,11 +40,7 @@ Resources:
         - AWSSecretsManagerGetSecretValuePolicy:
             SecretArn: !Ref DatamasqueSecretArn
         - AWSSecretsManagerGetSecretValuePolicy:
-            SecretArn: arn:aws:secretsmanager:ap-southeast-2:897875381524:secret:ae-demo/dm/connections-1d2iUw
-        - AWSSecretsManagerGetSecretValuePolicy:
             SecretArn: !Sub "arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:datamasque/*connections*"
-        - AWSSecretsManagerGetSecretValuePolicy:
-            SecretArn: arn:aws:secretsmanager:ap-southeast-2:897875381524:secret:ae-demo/dm/ae-pg-connections-XXpKxx
 
       VpcConfig:
         SubnetIds:
@@ -239,7 +235,7 @@ Resources:
             Schedule: "rate(7 days)"
             Input: '{
               "DBInstanceIdentifier": "demo-oracle-datamasque-03-rds",
-              "DBSecretIdentifier": "arn:aws:secretsmanager:ap-southeast-2:123456789:secret:datamasque/demo/oracle_connections-TpvoiO",
+              "DBSecretIdentifier": "arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:datamasque/demo/oracle_connections-TpvoiO",
               "DataMasqueRulesetId": "4f115c49-43bb-4cbc-a5b8-55a5aa9509e0",
               "PreferredAZ": "ap-southeast-2b"
               }'

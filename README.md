@@ -26,7 +26,7 @@ Refer to the [DataMasque Documentation](https://datamasque.com/portal/documentat
 
 Before triggering the workflow, you must create two secrets:
 	1.	DataMasque Instance Secret: Contains authentication details for connecting to the DataMasque instance to execute masking APIs.
-	2.	Database Connection Secret: Contains connection details for the database you want to mask.
+	2.	Database Connection Secret: Contains connection details for the database you want to mask. To ensure successful execution of the Step Function, the secret name must follow the format: `datamasque/*connections`.
 
 ##Database Connection Secret Naming Convention
 
@@ -36,7 +36,6 @@ The secret’s name must start with `datamasque/` and end with `connections`. Fo
 ## Required Key-Value Pairs in the Database Connection Secret
 The secret should include the following details for the database to be masked:
 
-The secret should include the following details for the database to be masked:
 
 
 ```json
@@ -171,7 +170,7 @@ You can also execute the step function manually.
 ```JSON
 {
   "DBInstanceIdentifier": "demo-oracle-datamasque-03-rds",
-  "DBSecretIdentifier": "arn:aws:secretsmanager:ap-southeast-2:897875381524:secret:datamasque/demo/oracle_connections-TpvoiO",
+  "DBSecretIdentifier": "arn:aws:secretsmanager:ap-southeast-2:123456789123:secret:datamasque/demo/oracle_connections-TpvoiO",
   "DataMasqueRulesetId": "4f115c49-43bb-4cbc-a5b8-55a5aa9509e0",
   "PreferredAZ": "ap-southeast-2b"
 }
