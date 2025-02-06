@@ -28,6 +28,7 @@ Before triggering the workflow, you must create two secrets:
 	1.	DataMasque Instance Secret: Contains authentication details for connecting to the DataMasque instance to execute masking APIs.
 	2.	Database Connection Secret: Contains connection details for the database you want to mask. To ensure successful execution of the Step Function, the secret name must follow the format: `datamasque/*connections`.
 
+
 ##Database Connection Secret Naming Convention
 
 The secret’s name must start with `datamasque/` and end with `connections`. For example:
