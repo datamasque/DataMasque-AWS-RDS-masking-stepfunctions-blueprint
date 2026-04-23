@@ -88,7 +88,7 @@
         {
           "Variable": "$.MaskRunStatus",
           "StringMatches": "finish*",
-          "Next": "CreateDBSnapshot"
+          "Next": "ApplyPRMTags"
         },
         {
           "Variable": "$.MaskRunStatus",
@@ -107,6 +107,11 @@
       "Type": "Task",
       "Resource": "${CheckMaskingRunStatus}",
       "Next": "IsMaskRunComplete"
+    },
+    "ApplyPRMTags": {
+      "Type": "Task",
+      "Resource": "${ApplyPRMTagsFunctionArn}",
+      "Next": "CreateDBSnapshot"
     },
     "CreateDBSnapshot": {
       "Type": "Task",
