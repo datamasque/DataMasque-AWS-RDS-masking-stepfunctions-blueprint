@@ -17,6 +17,10 @@ Parameters:
   DataMasqueSecurityGroup:
     Type: String
     Description: Security Group ID for connectivity between Staged DB and DM instance.
+  PRMTagValue:
+    Type: String
+    Description: PRM tag value in the format pc:<marketplace-product-code>.
+    Default: "pc:PLACEHOLDER_PRODUCT_CODE"
 
 Resources:
   DatamasqueRunSg:
@@ -50,9 +54,11 @@ Resources:
         Variables:
           DATANASQUE_BASE_URL: !Ref DatamasqueBaseUrl
           DATAMASQUE_SECRET_ARN: !Ref DatamasqueSecretArn
+      Tags:
+        aws-apn-id: !Ref PRMTagValue
 
   DescribeDBInstances:
-    Type: AWS::Serverless::Function # More info about Function Resource: https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/sam-resource-function.html
+    Type: AWS::Serverless::Function
     Properties:
       CodeUri: functions/describe_db_instances/
       Handler: app.lambda_handler
@@ -62,9 +68,14 @@ Resources:
         - x86_64
       Policies:
         - AmazonRDSReadOnlyAccess
+      Environment:
+        Variables:
+          AWS_SDK_UA_APP_ID: !Ref PRMTagValue
+      Tags:
+        aws-apn-id: !Ref PRMTagValue
 
   DescribeDBSnapshot:
-    Type: AWS::Serverless::Function # More info about Function Resource: https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/sam-resource-function.html
+    Type: AWS::Serverless::Function
     Properties:
       CodeUri: functions/describe_db_snapshots/
       Handler: app.lambda_handler
@@ -81,9 +92,14 @@ Resources:
                 - rds:AddTagsToResource
               Effect: Allow
               Resource: "*"
+      Environment:
+        Variables:
+          AWS_SDK_UA_APP_ID: !Ref PRMTagValue
+      Tags:
+        aws-apn-id: !Ref PRMTagValue
 
   RestoreDBInstanceFromSnapshot:
-    Type: AWS::Serverless::Function # More info about Function Resource: https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/sam-resource-function.html
+    Type: AWS::Serverless::Function
     Properties:
       CodeUri: functions/restore_db_instance_from_db_snapshot/
       Handler: app.lambda_handler
@@ -92,6 +108,7 @@ Resources:
       Environment:
         Variables:
           DATANASQUE_SG: !Ref DataMasqueSecurityGroup
+          AWS_SDK_UA_APP_ID: !Ref PRMTagValue
       Architectures:
         - x86_64
       Policies:
@@ -104,9 +121,11 @@ Resources:
                 - rds:RestoreDBClusterFromSnapshot
               Effect: Allow
               Resource: "*"
+      Tags:
+        aws-apn-id: !Ref PRMTagValue
 
   CheckDBAvailability:
-    Type: AWS::Serverless::Function # More info about Function Resource: https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/sam-resource-function.html
+    Type: AWS::Serverless::Function
     Properties:
       CodeUri: functions/check_db_availability/
       Handler: app.lambda_handler
@@ -125,9 +144,14 @@ Resources:
                 - rds:CreateDBInstance
               Effect: Allow
               Resource: "*"
+      Environment:
+        Variables:
+          AWS_SDK_UA_APP_ID: !Ref PRMTagValue
+      Tags:
+        aws-apn-id: !Ref PRMTagValue
 
   CreateMaskedSnapshot:
-    Type: AWS::Serverless::Function # More info about Function Resource: https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/sam-resource-function.html
+    Type: AWS::Serverless::Function
     Properties:
       CodeUri: functions/create_masked_snapshot/
       Handler: app.lambda_handler
@@ -141,11 +165,17 @@ Resources:
             - Action:
                 - rds:CreateDBSnapshot
                 - rds:CreateDBClusterSnapshot
+                - rds:AddTagsToResource
               Effect: Allow
               Resource: "*"
+      Environment:
+        Variables:
+          AWS_SDK_UA_APP_ID: !Ref PRMTagValue
+      Tags:
+        aws-apn-id: !Ref PRMTagValue
 
   CheckMaskedSnapshot:
-    Type: AWS::Serverless::Function # More info about Function Resource: https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/sam-resource-function.html
+    Type: AWS::Serverless::Function
     Properties:
       CodeUri: functions/check_masked_snapshot/
       Handler: app.lambda_handler
@@ -155,9 +185,14 @@ Resources:
         - x86_64
       Policies:
         - AmazonRDSReadOnlyAccess
+      Environment:
+        Variables:
+          AWS_SDK_UA_APP_ID: !Ref PRMTagValue
+      Tags:
+        aws-apn-id: !Ref PRMTagValue
 
   CheckMaskingRunStatus:
-    Type: AWS::Serverless::Function # More info about Function Resource: https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/sam-resource-function.html
+    Type: AWS::Serverless::Function
     Properties:
       CodeUri: functions/check_masking_run/
       Handler: app.lambda_handler
@@ -178,10 +213,38 @@ Resources:
         Variables:
           DATANASQUE_BASE_URL: !Ref DatamasqueBaseUrl
           DATAMASQUE_SECRET_ARN: !Ref DatamasqueSecretArn
+      Tags:
+        aws-apn-id: !Ref PRMTagValue
+
+  ApplyPRMTags:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: functions/apply_prm_tags/
+      Handler: app.lambda_handler
+      Runtime: python3.9
+      Timeout: 30
+      Architectures:
+        - x86_64
+      Policies:
+        - AmazonRDSReadOnlyAccess
+        - Statement:
+            - Action:
+                - rds:AddTagsToResource
+                - rds:ModifyDBInstance
+              Effect: Allow
+              Resource: "*"
+      Environment:
+        Variables:
+          PRM_TAG_VALUE: !Ref PRMTagValue
+          AWS_SDK_UA_APP_ID: !Ref PRMTagValue
+      Tags:
+        aws-apn-id: !Ref PRMTagValue
 
   DatamasqueBlueprintStateMachine:
-    Type: AWS::Serverless::StateMachine # More info about State Machine Resource: https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/sam-resource-statemachine.html
+    Type: AWS::Serverless::StateMachine
     Properties:
+      Tags:
+        aws-apn-id: !Ref PRMTagValue
       DefinitionUri: statemachine/datamasque_blueprint.asl.json
       DefinitionSubstitutions:
         DatamasqueRunFunctionArn: !GetAtt DatamasqueRun.Arn
@@ -192,6 +255,7 @@ Resources:
         CheckMaskingRunStatus: !GetAtt CheckMaskingRunStatus.Arn
         CreateMaskedSnapshot: !GetAtt CreateMaskedSnapshot.Arn
         CheckMaskedSnapshot: !GetAtt CheckMaskedSnapshot.Arn
+        ApplyPRMTagsFunctionArn: !GetAtt ApplyPRMTags.Arn
       Policies:
         - LambdaInvokePolicy:
             FunctionName: !Ref DescribeDBInstances
@@ -209,6 +273,8 @@ Resources:
             FunctionName: !Ref CreateMaskedSnapshot
         - LambdaInvokePolicy:
             FunctionName: !Ref CheckMaskedSnapshot
+        - LambdaInvokePolicy:
+            FunctionName: !Ref ApplyPRMTags
         - Statement:
             - Action:
                 - rds:DeleteDBInstance
