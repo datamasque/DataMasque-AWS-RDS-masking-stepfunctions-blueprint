@@ -1,5 +1,6 @@
 import json
 import os
+import secrets
 from typing import Dict, Optional, Union
 
 import boto3
@@ -7,7 +8,7 @@ import boto3
 import requests
 
 base_url = os.environ[
-    "DATANASQUE_BASE_URL"
+    "DATAMASQUE_BASE_URL"
 ]  # change base url to the url of the DataMasque instance
 
 datamasque_secret_arn = os.environ["DATAMASQUE_SECRET_ARN"]
@@ -89,7 +90,7 @@ def connections(base_url, token, connection_id=None):
     return response.json()
 
 
-def create_connection(base_url: str, token: str, secret: dict, dm_ruleset_id: str):
+def create_connection(base_url: str, token: str, secret: dict, dm_ruleset_id: str, run_secret: str):
     """
     Creates a database connection.
 
@@ -225,7 +226,7 @@ def create_connection(base_url: str, token: str, secret: dict, dm_ruleset_id: st
             if conn_response.status_code == 201:
 
                 create_run_response = create_run(
-                    base_url, token, conn_response.json()["id"], dm_ruleset_id
+                    base_url, token, conn_response.json()["id"], dm_ruleset_id, run_secret
                 )
                 print(create_run_response)
                 return create_run_response
@@ -332,7 +333,7 @@ def rulesets(base_url, token, ruleset_id=None):
     return response.json()
 
 
-def create_run(base_url, token, conn_id, dm_ruleset_id):
+def create_run(base_url, token, conn_id, dm_ruleset_id, run_secret):
     """
     Create a run
 
@@ -347,7 +348,7 @@ def create_run(base_url, token, conn_id, dm_ruleset_id):
         'connection': 'connection_id',
         'ruleset': 'ruleset_id',
         'options': {
-            'dry_run': False, 'buffer_size': 10000, 'continue_on_failure': False, 'run_secret': 'thisismynewrunsecret'
+            'dry_run': False, 'buffer_size': 10000, 'continue_on_failure': False, 'run_secret': '<run_secret>'
             }
        }
 
@@ -376,7 +377,7 @@ def create_run(base_url, token, conn_id, dm_ruleset_id):
             "dry_run": False,
             "buffer_size": 10000,
             "continue_on_failure": False,
-            "run_secret": "thisismynewrunsecret",
+            "run_secret": run_secret,
         },
     }
     api = "api/runs/"
@@ -384,6 +385,39 @@ def create_run(base_url, token, conn_id, dm_ruleset_id):
     print(response)
     print(response.json())
     return response.json()
+
+
+class RunSecretError(Exception):
+    """Raised when the run secret cannot be resolved from the Step Function input."""
+
+
+def resolve_run_secret(event, secrets_client):
+    """
+    Resolve the DataMasque run_secret from the Step Function input.
+
+    Contract (matches DataMasque admin-server views.py:141-151):
+      - "RunSecret" present     -> use it verbatim (Manual mode).
+      - "AwsSecretArn" present  -> SecretString IS the run secret (plain string).
+                                   SecretBinary is not supported.
+      - Neither present         -> generate a fresh URL-safe 32-byte token (Random mode).
+    If both are present, "RunSecret" wins (matches admin-server precedence).
+    """
+    if "RunSecret" in event:
+        rs = event["RunSecret"]
+        if not isinstance(rs, str) or rs == "":
+            raise RunSecretError("RunSecret must be a non-empty string")
+        return rs
+
+    if "AwsSecretArn" in event:
+        arn = event["AwsSecretArn"]
+        resp = secrets_client.get_secret_value(SecretId=arn)
+        if "SecretString" not in resp:
+            raise RunSecretError(
+                f"AwsSecretArn={arn} has no SecretString (SecretBinary not supported)"
+            )
+        return resp["SecretString"]
+
+    return secrets.token_urlsafe(32)
 
 
 def lambda_handler(event, context):
@@ -403,15 +437,15 @@ def lambda_handler(event, context):
         user_username = datamasque_credential["username"]
         user_password = datamasque_credential["password"]
         dm_ruleset_id = event["DataMasqueRulesetId"]
-        DBInstanceIdentifier = event["StageDB"]
         DBSecretIdentifier = event["DBSecretIdentifier"]
+        run_secret = resolve_run_secret(event, client)
         secret_response = get_secret(DBSecretIdentifier)
         if secret_response:
             user_login_res = login(base_url, user_username, user_password)
 
             token = {"Authorization": "Token " + user_login_res["key"]}
             create_connection_response = create_connection(
-                base_url, token, secret_response, dm_ruleset_id
+                base_url, token, secret_response, dm_ruleset_id, run_secret
             )
             if create_connection_response["status"] == "failure":
                 event["MaskRunStatus"] = create_connection_response["status"]

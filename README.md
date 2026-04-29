@@ -20,8 +20,6 @@ The Step Functions workflow orchestrates tasks by invoking AWS lambda functions 
 
 ## Prerequisites
 
-
-
 Refer to the [DataMasque Documentation](https://datamasque.com/portal/documentation/2.24.0/state-machine-execution.html) for detailed information on the permissions required for the DataMasque EC2 instance to initiate this automation through the `automation` UI.
 
 Before triggering the workflow, you must create two secrets:
@@ -37,8 +35,6 @@ The secret’s name must start with `datamasque/` and end with `connections`. Fo
 ## Required Key-Value Pairs in the Database Connection Secret
 The secret should include the following details for the database to be masked:
 
-
-
 ```json
 {
   "username": "postgres",
@@ -51,13 +47,13 @@ The secret should include the following details for the database to be masked:
 }
 ```
 
-- username: Database username for the staged database.
-- password: Password for the provided username.
-- engine: The database engine (e.g., postgres).
-- host: RDS/Aurora endpoint of the source database (DataMasque connects to the staged database, not the source).
-- port: Port number of the database.
-- dbname: Name of the database.
-- schema: Schema name for the masking job.
+- `username`: Database username for the staged database.
+- `password`: Password for the provided username.
+- `engine`: The database engine (e.g., postgres).
+- `host`: RDS/Aurora endpoint of the source database (DataMasque connects to the staged database, not the source).
+- `port`: Port number of the database.
+- `dbname`: Name of the database.
+- `schema`: Schema name for the masking job.
 
 Optional Database-Specific Parameters
 service_name: Applicable for Oracle connections.
@@ -84,13 +80,29 @@ Workflow Execution Steps
 - Generates a masked snapshot of the staged database.
 - Removes the temporary connection and deletes the staged database.
 
-	Note: If the Step Function execution fails, the staged database must be manually deleted if it got created by the automation.
+> Note: If the Step Function execution fails, the staged database must be manually deleted if it got created by the automation.
 
 Upon successful completion, a masked RDS snapshot is produced, ready for provisioning non-production databases.
 
+## Run Secret Configuration
+
+The DataMasque masking run uses a `run_secret` as keying material — masked outputs are deterministic for a given run secret, so reusing it produces repeatable masks across runs.
+
+The Step Function input accepts **one of** the following optional fields, which correspond to the three radio options on the DataMasque Automation page:
+
+| UI option                            | Input field                 | Behavior                                                                                                                                                                              |
+|--------------------------------------|-----------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| Securely Generated Random Run Secret | _(omit both)_               | The `DatamasqueRun` Lambda generates a fresh URL-safe 32-byte token. Each execution uses a different secret.                                                                          |
+| Specify Your Own Run Secret          | `"RunSecret": "<string>"`   | The literal string is used as the run secret. Reuse the same string across runs to produce repeatable masks.                                                                          |
+| Load from AWS Secrets Manager        | `"AwsSecretArn": "arn:..."` | The Lambda fetches the secret and treats `SecretString` as the run secret (plain string, not JSON). `SecretBinary` is not supported. The ARN must match `AllowedRunSecretArnPattern`. |
+
+If both `RunSecret` and `AwsSecretArn` are present, `RunSecret` wins (matches the DataMasque admin-server precedence).
+
+**AwsSecretArn rotation caveat:** rotating the source secret produces a different `run_secret` on the next execution and breaks repeatability of masked output. Treat the secret as immutable for the lifetime of any data you want reproducibly masked.
+
 ## Network
 
-The diagram below describes the connectivities between the DataMasque instance, AWS Lambda functions (provisioned by
+The diagram below describes the connectivity between the DataMasque instance, AWS Lambda functions (provisioned by
 this template) and the staging RDS instance (provisioned by this template).
 
 ![Network requirements](network.png "Network requirements")
@@ -119,13 +131,14 @@ Make sure you have created a secret with the following keys and values:
 
 ###### Before deploying the template, please make sure you have the value for the following parameters:
 
-| Parameter                                                                                                              | Description                                                                                                                    |
-|------------------------------------------------------------------------------------------------------------------------|--------------------------------------------------------------------------------------------------------------------------------|
-| VpcId                                                                                                                  | VPC ID where the lambdas will be deployed.                                                                                     |
-| SubnetIds                                                                                                              | List of Subnet IDs where the lambdas will be deployed.  <br> It's recommended to provide at least two **SubnetIds** for redundancy and availability. |                                                                                                                                |
-| DatamasqueBaseUrl                                                                                                      | DataMasque instance URL with the EC2's private IP, i.e. https://\<ec2-instance-private-ip>.                                    |
-| DatamasqueSecretArn                                                                                                    | Secret with DataMasque instance credentials.                                                                                   |
-| DataMasqueSecurityGroup                                                                                                 | The Security Group ID that allows DataMasque instance to connect o to RDS ID.                                                                                                      |
+| Parameter                  | Description                                                                                                                                                                                                                                                     |
+|----------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| VpcId                      | VPC ID where the lambdas will be deployed.                                                                                                                                                                                                                      |
+| SubnetIds                  | List of Subnet IDs where the lambdas will be deployed.  <br> It's recommended to provide at least two **SubnetIds** for redundancy and availability.                                                                                                            |                                                                                                                                |
+| DatamasqueBaseUrl          | DataMasque instance URL with the EC2's private IP, i.e. https://\<ec2-instance-private-ip>.                                                                                                                                                                     |
+| DatamasqueSecretArn        | Secret with DataMasque instance credentials.                                                                                                                                                                                                                    |
+| DataMasqueSecurityGroup    | The Security Group ID that allows DataMasque instance to connect o to RDS ID.                                                                                                                                                                                   |
+| AllowedRunSecretArnPattern | Secret-name pattern (after `secret:` in the ARN) the DatamasqueRun Lambda may read for the optional `AwsSecretArn` input. Defaults to `datamasque/*run-secret*` in the deploying account/region. Use `*` to permit any secret in the account (not recommended). |
 |
 
 ###### Follow the steps to deploy the CloudFormation Stack:
@@ -176,6 +189,8 @@ You can also execute the step function manually.
   "PreferredAZ": "ap-southeast-2b"
 }
 ```
+
+Optionally include exactly one of `"RunSecret"` or `"AwsSecretArn"` to control the masking run secret — see the [Run Secret Configuration](#run-secret-configuration) section above. Omit both for a freshly-generated random secret per execution.
 
 ### Schedule data masking execution
 

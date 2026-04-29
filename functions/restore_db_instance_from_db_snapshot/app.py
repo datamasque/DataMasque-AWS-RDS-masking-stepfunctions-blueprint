@@ -6,7 +6,7 @@ import boto3
 def lambda_handler(event, context):
 
     client = boto3.client("rds")
-    vpc_sg = os.environ["DATANASQUE_SG"]
+    vpc_sg = os.environ["DATAMASQUE_SG"]
 
     try:
         if event["DBType"] == "RDS":

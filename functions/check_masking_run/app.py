@@ -7,7 +7,7 @@ import boto3
 import requests
 
 base_url = os.environ[
-    "DATANASQUE_BASE_URL"
+    "DATAMASQUE_BASE_URL"
 ]  # change base url to the url of the DataMasque instance
 
 datamasque_secret_arn = os.environ["DATAMASQUE_SECRET_ARN"]
