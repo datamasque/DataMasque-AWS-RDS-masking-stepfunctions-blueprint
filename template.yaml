@@ -17,6 +17,16 @@ Parameters:
   DataMasqueSecurityGroup:
     Type: String
     Description: Security Group ID for connectivity between Staged DB and DM instance.
+  AllowedRunSecretArnPattern:
+    Type: String
+    Default: 'datamasque/*run-secret*'
+    Description: >
+      Secret-name pattern (the part after 'secret:' in the ARN) that the
+      DatamasqueRun Lambda is permitted to read for the AwsSecretArn input
+      field. Defaults to 'datamasque/*run-secret*' in the deploying account
+      and region. Use '*' to permit any secret in the account (not
+      recommended). Cross-account access also requires a resource policy
+      on the source secret.
 
 Resources:
   DatamasqueRunSg:
@@ -41,6 +51,11 @@ Resources:
             SecretArn: !Ref DatamasqueSecretArn
         - AWSSecretsManagerGetSecretValuePolicy:
             SecretArn: !Sub "arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:datamasque/*connections*"
+        - Statement:
+            - Sid: ReadUserSuppliedRunSecret
+              Effect: Allow
+              Action: secretsmanager:GetSecretValue
+              Resource: !Sub 'arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:${AllowedRunSecretArnPattern}*'
       VpcConfig:
         SubnetIds:
           Ref: SubnetIds
@@ -48,7 +63,7 @@ Resources:
           - Ref: DatamasqueRunSg
       Environment:
         Variables:
-          DATANASQUE_BASE_URL: !Ref DatamasqueBaseUrl
+          DATAMASQUE_BASE_URL: !Ref DatamasqueBaseUrl
           DATAMASQUE_SECRET_ARN: !Ref DatamasqueSecretArn
 
   DescribeDBInstances:
@@ -91,7 +106,7 @@ Resources:
       Timeout: 10
       Environment:
         Variables:
-          DATANASQUE_SG: !Ref DataMasqueSecurityGroup
+          DATAMASQUE_SG: !Ref DataMasqueSecurityGroup
       Architectures:
         - x86_64
       Policies:
@@ -176,7 +191,7 @@ Resources:
           - Ref: DatamasqueRunSg
       Environment:
         Variables:
-          DATANASQUE_BASE_URL: !Ref DatamasqueBaseUrl
+          DATAMASQUE_BASE_URL: !Ref DatamasqueBaseUrl
           DATAMASQUE_SECRET_ARN: !Ref DatamasqueSecretArn
 
   DatamasqueBlueprintStateMachine:
