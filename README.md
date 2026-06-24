@@ -252,7 +252,7 @@ profile = "datamasque-dtq"
 confirm_changeset = true
 capabilities = "CAPABILITY_IAM"
 disable_rollback = true
-parameter_overrides = "DataMasqueSecurityGroup=\"sg-xxxxxxxxxxxx\" VpcId=\"vpc-XXXXXXXXXXXXXXX\" DatamasqueSecretArn=\"arn:aws:secretsmanager:region:11111111111111:secret:dm/credentials-Jqufnp\" SubnetIds=\"subnet-XXXXXXXXXXX,subnet-XXXXXXXXXXXX\" DatamasqueBaseUrl=\"https://10.90.6.14/\""
+parameter_overrides = "DataMasqueSecurityGroup=\"sg-xxxxxxxxxxxx\" VpcId=\"vpc-XXXXXXXXXXXXXXX\" DatamasqueSecretArn=\"arn:aws:secretsmanager:region:11111111111111:secret:dm/credentials-Jqufnp\" SubnetIds=\"subnet-XXXXXXXXXXX,subnet-XXXXXXXXXXXX\" DatamasqueBaseUrl=\"https://datamasque.example.internal/\""
 image_repositories = []
 
 ```

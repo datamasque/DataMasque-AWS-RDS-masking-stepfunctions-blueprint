@@ -1,5 +1,3 @@
-import os
-
 import boto3
 
 
@@ -19,14 +17,16 @@ def lambda_handler(event, context):
         )
         instance = response["DBInstances"][0]
 
-        security_groups = instance["VpcSecurityGroups"]
-        VpcSecurityGroupIds = [d["VpcSecurityGroupId"] for d in security_groups]
-
+        # NOTE: the restore Lambda attaches the DataMasque security group from
+        # its DATAMASQUE_SG env var, so the source instance's security groups are
+        # intentionally not propagated to the staging clone.
         parameters = {
             "DBSnapshotIdentifier": db_snapshot_identifier,
             "DBInstanceIdentifier": instance["DBInstanceIdentifier"] + "-datamasque",
             "DBInstanceClass": instance["DBInstanceClass"],
-            "AvailabilityZone": event.get("PreferredAZ", instance["AvailabilityZone"]),
+            # `or` (not get's default) so an explicit null/empty PreferredAZ in
+            # the input still falls back to the source AZ; boto3 rejects None.
+            "AvailabilityZone": event.get("PreferredAZ") or instance["AvailabilityZone"],
             "DBSubnetGroupName": instance["DBSubnetGroup"]["DBSubnetGroupName"],
             "OptionGroupName": (
                 instance["OptionGroupMemberships"][0]["OptionGroupName"]
@@ -38,7 +38,6 @@ def lambda_handler(event, context):
                 if instance["DBParameterGroups"]
                 else None
             ),
-            "VpcSecurityGroupIds": VpcSecurityGroupIds,
             "DeletionProtection": False,
         }
 
@@ -49,19 +48,15 @@ def lambda_handler(event, context):
         )
         cluster = response["DBClusters"][0]
 
-        # Extract VPC Security Group IDs
-        VpcSecurityGroupIds = [
-            d["VpcSecurityGroupId"] for d in cluster["VpcSecurityGroups"]
-        ]
-
-        # Build parameters dictionary for Aurora cluster
+        # Build parameters dictionary for Aurora cluster. As with RDS, the staging
+        # clone's security group is set by the restore Lambda's DATAMASQUE_SG env
+        # var, so source security groups are intentionally not propagated.
         parameters = {
             "DBSnapshotIdentifier": db_snapshot_identifier,
             "DBInstanceIdentifier": db_instance_identifier + "-datamasque",
             "AvailabilityZone": event.get("PreferredAZ"),
             "DBSubnetGroupName": cluster["DBSubnetGroup"],
             "DBClusterParameterGroupName": cluster["DBClusterParameterGroup"],
-            "VpcSecurityGroupIds": VpcSecurityGroupIds,
             "Engine": cluster["Engine"],
             "EngineMode": cluster.get("EngineMode", "provisioned"),
             "DeletionProtection": False,

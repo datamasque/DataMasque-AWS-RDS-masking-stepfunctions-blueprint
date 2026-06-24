@@ -1,5 +1,6 @@
 import json
 import os
+import secrets
 from datetime import datetime
 from operator import itemgetter
 
@@ -63,7 +64,7 @@ def lambda_handler(event, context):
                 print(
                     "No existing Aurora cluster snapshots found. Generating a new snapshot."
                 )
-                current_date = datetime.now().strftime("%d%b%Y%H%M")
+                current_date = f"{datetime.now().strftime('%d%b%Y%H%M%S')}-{secrets.token_hex(3)}"
                 snapshot_identifier = (
                     f"{DBInstanceIdentifier}-datamasque-{current_date}"
                 )
@@ -105,7 +106,7 @@ def lambda_handler(event, context):
                 db_instance_resp = client.describe_db_instances(
                     DBInstanceIdentifier=DBInstanceIdentifier,
                 )
-                current_date = datetime.now().strftime("%d%b%Y%H%M")
+                current_date = f"{datetime.now().strftime('%d%b%Y%H%M%S')}-{secrets.token_hex(3)}"
                 snapshot_identifier = f"{db_instance_resp['DBInstances'][0]['DBInstanceIdentifier']}-datamasque-{current_date}"
                 response = client.create_db_snapshot(
                     DBSnapshotIdentifier=snapshot_identifier,

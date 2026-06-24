@@ -1,15 +1,9 @@
 import json
-import os
-from datetime import datetime
-from operator import itemgetter
 
 import boto3
 
 """
-Creates a snapshot of the masked RDS instance.
-
-
-    
+Checks the status of the masked RDS/Aurora snapshot.
 """
 
 

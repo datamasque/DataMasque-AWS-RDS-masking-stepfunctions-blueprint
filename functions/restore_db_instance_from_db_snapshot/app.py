@@ -1,6 +1,10 @@
+import logging
 import os
 
 import boto3
+
+logger = logging.getLogger()
+logger.setLevel(logging.INFO)
 
 
 def lambda_handler(event, context):
@@ -10,21 +14,30 @@ def lambda_handler(event, context):
 
     try:
         if event["DBType"] == "RDS":
+            params = event["parameters"]
+            restore_kwargs = {
+                "DBSnapshotIdentifier": params["DBSnapshotIdentifier"],
+                "DBInstanceIdentifier": params["DBInstanceIdentifier"],
+                "DBInstanceClass": params["DBInstanceClass"],
+                # PreferredAZ is optional: describe_db_instances already resolved
+                # AvailabilityZone to the source AZ when it was not supplied.
+                "AvailabilityZone": params["AvailabilityZone"],
+                "DBSubnetGroupName": params["DBSubnetGroupName"],
+                "VpcSecurityGroupIds": [vpc_sg],
+                "DeletionProtection": params["DeletionProtection"],
+            }
+            # OptionGroupName / DBParameterGroupName are None when the source has
+            # none; boto3 rejects None, so only pass them when present.
+            if params.get("OptionGroupName"):
+                restore_kwargs["OptionGroupName"] = params["OptionGroupName"]
+            if params.get("DBParameterGroupName"):
+                restore_kwargs["DBParameterGroupName"] = params["DBParameterGroupName"]
+
             # Restore an RDS instance from a snapshot
-            restore_response = client.restore_db_instance_from_db_snapshot(
-                DBSnapshotIdentifier=event["parameters"]["DBSnapshotIdentifier"],
-                DBInstanceIdentifier=event["parameters"]["DBInstanceIdentifier"],
-                DBInstanceClass=event["parameters"]["DBInstanceClass"],
-                AvailabilityZone=event["PreferredAZ"],
-                DBSubnetGroupName=event["parameters"]["DBSubnetGroupName"],
-                OptionGroupName=event["parameters"]["OptionGroupName"],
-                DBParameterGroupName=event["parameters"]["DBParameterGroupName"],
-                VpcSecurityGroupIds=[vpc_sg],
-                DeletionProtection=event["parameters"]["DeletionProtection"],
-            )
+            restore_response = client.restore_db_instance_from_db_snapshot(**restore_kwargs)
             event["status"] = "success"
             event["StageDB"] = event["parameters"]["DBInstanceIdentifier"]
-            print(f"RDS instance restore initiated: {restore_response}")
+            logger.info("RDS instance restore initiated: %s", restore_response.get("DBInstance", {}).get("DBInstanceIdentifier"))
 
         elif event["DBType"] == "Aurora":
             # Restore an Aurora cluster from a snapshot
@@ -39,7 +52,7 @@ def lambda_handler(event, context):
             )
             event["status"] = "success"
             event["StageDB"] = event["parameters"]["DBInstanceIdentifier"]
-            print(f"Aurora cluster restore initiated: {restore_response}")
+            logger.info("Aurora cluster restore initiated: %s", restore_response.get("DBCluster", {}).get("DBClusterIdentifier"))
 
         else:
             raise ValueError(
@@ -49,11 +62,11 @@ def lambda_handler(event, context):
         return event
 
     except Exception as e:
-        print(f"Error restoring snapshot: {e}")
-        return {
-            "status": "failure",
-            "Error": f"Error restoring snapshot: {e}",
-            "StageDB": event.get("parameters", {}).get(
-                "DBInstanceIdentifier", "unknown"
-            ),
-        }
+        logger.error("Error restoring snapshot: %s", e)
+        # Preserve DBType/StageDB so the failure-cleanup routing can run.
+        event["status"] = "failure"
+        event["Error"] = f"Error restoring snapshot: {e}"
+        event["StageDB"] = event.get("parameters", {}).get(
+            "DBInstanceIdentifier", "unknown"
+        )
+        return event
