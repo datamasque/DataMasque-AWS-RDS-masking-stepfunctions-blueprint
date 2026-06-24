@@ -1,16 +1,40 @@
 import json
+import logging
 import os
-from typing import Dict, Optional, Union
 
 import boto3
 
 import requests
+
+logger = logging.getLogger()
+logger.setLevel(logging.INFO)
 
 base_url = os.environ[
     "DATAMASQUE_BASE_URL"
 ]  # change base url to the url of the DataMasque instance
 
 datamasque_secret_arn = os.environ["DATAMASQUE_SECRET_ARN"]
+
+# TLS verification defaults to ON. Set DATAMASQUE_VERIFY_TLS=false only for a
+# documented self-signed / private-CA DataMasque instance on a trusted path.
+VERIFY_TLS = os.environ.get("DATAMASQUE_VERIFY_TLS", "true").strip().lower() not in (
+    "false",
+    "0",
+    "no",
+)
+
+
+def _redacted_event(event):
+    """Copy of the event with sensitive run-secret fields masked for logging.
+
+    The event is carried forward between states, so a RunSecret / AwsSecretArn
+    supplied in the execution input reaches this Lambda too; never log it raw.
+    """
+    redacted = dict(event)
+    for key in ("RunSecret", "AwsSecretArn"):
+        if key in redacted:
+            redacted[key] = "***redacted***"
+    return redacted
 
 
 def login(base_url, username, password):
@@ -40,11 +64,10 @@ def login(base_url, username, password):
     api = "api/auth/token/login/"
     data = {"username": username, "password": password}
     headers = {"Content-Type": "application/json"}
-    response = requests.post(base_url + api, json=data, headers=headers, verify=False)
-    # url = "https://demo01.demo.datamasque.com/api/auth/token/login/"
+    response = requests.post(base_url + api, json=data, headers=headers, verify=VERIFY_TLS)
 
-    print(response)
-    print(response.json())
+    # Do not log the response body: it contains the auth token.
+    logger.info("Login response status: %s", response.status_code)
     return response.json()
 
 
@@ -84,9 +107,9 @@ def runs(base_url, token, run_id):
 
     api = "api/runs/{}/".format(run_id)
 
-    response = requests.get(base_url + api, headers=token, verify=False)
-    print(response)
-    print(response.json())
+    response = requests.get(base_url + api, headers=token, verify=VERIFY_TLS)
+    # run objects may carry the run_secret in options; log status only.
+    logger.info("Get run status: %s", response.status_code)
     return response.json()
 
 
@@ -123,16 +146,14 @@ def delete_connection(base_url, token, conn_id):
     """
 
     api = f"/api/connections/{conn_id}/"
-    print(f"Deleting temporary connection - {conn_id}")
-    response = requests.delete(base_url + api, headers=token, verify=False)
-    print(response)
-    # print(response.json())
-    # return response.json()
+    logger.info("Deleting temporary connection - %s", conn_id)
+    response = requests.delete(base_url + api, headers=token, verify=VERIFY_TLS)
+    logger.info("Delete connection status: %s", response.status_code)
 
 
 def lambda_handler(event, context):
 
-    print(json.dumps(event))
+    logger.info("Event: %s", json.dumps(_redacted_event(event)))
 
     client = boto3.client("secretsmanager")
 
@@ -159,12 +180,12 @@ def lambda_handler(event, context):
         if event["MaskRunStatus"] == "finished":
             conn_id = run_response["connection"]
             delete_connection(base_url, token, conn_id)
-        print(json.dumps(event))
+        logger.info("Result event: %s", json.dumps(_redacted_event(event)))
         return event
 
     except Exception as e:
-        print(f"Error checking rds status: {e}")
+        logger.error("Error checking masking run status: %s", e)
         event["MaskRunStatus"] = "failure"
         event["Error"] = f"DataMasque run failed status: {e}"
-        print(json.dumps(event))
+        logger.info("Result event: %s", json.dumps(_redacted_event(event)))
         return event
