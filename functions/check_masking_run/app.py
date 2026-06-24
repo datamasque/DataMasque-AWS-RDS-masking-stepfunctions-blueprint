@@ -15,13 +15,17 @@ base_url = os.environ[
 
 datamasque_secret_arn = os.environ["DATAMASQUE_SECRET_ARN"]
 
-# TLS verification defaults to ON. Set DATAMASQUE_VERIFY_TLS=false only for a
-# documented self-signed / private-CA DataMasque instance on a trusted path.
-VERIFY_TLS = os.environ.get("DATAMASQUE_VERIFY_TLS", "true").strip().lower() not in (
-    "false",
-    "0",
-    "no",
-)
+def parse_verify_tls(value):
+    """Parse the DATAMASQUE_VERIFY_TLS env value into a bool (default secure).
+
+    TLS verification defaults to ON. Only the explicit strings false/0/no
+    (case-insensitive) disable it, for documented self-signed / private-CA
+    DataMasque instances on a trusted path.
+    """
+    return str(value).strip().lower() not in ("false", "0", "no")
+
+
+VERIFY_TLS = parse_verify_tls(os.environ.get("DATAMASQUE_VERIFY_TLS", "true"))
 
 
 def _redacted_event(event):
