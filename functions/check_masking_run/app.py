@@ -15,7 +15,7 @@ base_url = os.environ[
 
 datamasque_secret_arn = os.environ["DATAMASQUE_SECRET_ARN"]
 
-def parse_verify_tls(value):
+def parse_verify_tls(value: str | None) -> bool:
     """Parse the DATAMASQUE_VERIFY_TLS env value into a bool (default secure).
 
     TLS verification defaults to ON. Only the explicit strings false/0/no
@@ -28,7 +28,7 @@ def parse_verify_tls(value):
 VERIFY_TLS = parse_verify_tls(os.environ.get("DATAMASQUE_VERIFY_TLS", "true"))
 
 
-def _redacted_event(event):
+def _redacted_event(event: dict) -> dict:
     """Copy of the event with sensitive run-secret fields masked for logging.
 
     The event is carried forward between states, so a RunSecret / AwsSecretArn

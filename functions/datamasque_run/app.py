@@ -17,7 +17,7 @@ base_url = os.environ[
 
 datamasque_secret_arn = os.environ["DATAMASQUE_SECRET_ARN"]
 
-def parse_verify_tls(value):
+def parse_verify_tls(value: str | None) -> bool:
     """Parse the DATAMASQUE_VERIFY_TLS env value into a bool (default secure).
 
     TLS verification defaults to ON. Only the explicit strings false/0/no
