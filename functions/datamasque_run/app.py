@@ -1,17 +1,33 @@
 import json
+import logging
 import os
 import secrets
-from typing import Dict, Optional, Union
+from typing import Dict, Optional
 
 import boto3
 
 import requests
+
+logger = logging.getLogger()
+logger.setLevel(logging.INFO)
 
 base_url = os.environ[
     "DATAMASQUE_BASE_URL"
 ]  # change base url to the url of the DataMasque instance
 
 datamasque_secret_arn = os.environ["DATAMASQUE_SECRET_ARN"]
+
+def parse_verify_tls(value: str | None) -> bool:
+    """Parse the DATAMASQUE_VERIFY_TLS env value into a bool (default secure).
+
+    TLS verification defaults to ON. Only the explicit strings false/0/no
+    (case-insensitive) disable it, for documented self-signed / private-CA
+    DataMasque instances on a trusted path.
+    """
+    return str(value).strip().lower() not in ("false", "0", "no")
+
+
+VERIFY_TLS = parse_verify_tls(os.environ.get("DATAMASQUE_VERIFY_TLS", "true"))
 
 
 def login(base_url, username, password):
@@ -41,11 +57,10 @@ def login(base_url, username, password):
     api = "api/auth/token/login/"
     data = {"username": username, "password": password}
     headers = {"Content-Type": "application/json"}
-    response = requests.post(base_url + api, json=data, headers=headers, verify=False)
-    # url = "https://demo01.demo.datamasque.com/api/auth/token/login/"
+    response = requests.post(base_url + api, json=data, headers=headers, verify=VERIFY_TLS)
 
-    print(response)
-    print(response.json())
+    # Do not log the response body: it contains the auth token.
+    logger.info("Login response status: %s", response.status_code)
     return response.json()
 
 
@@ -84,9 +99,9 @@ def connections(base_url, token, connection_id=None):
         api = "api/connections/{}/".format(connection_id)
     else:
         api = "api/connections/"
-    response = requests.get(base_url + api, headers=token, verify=False)
-    print(response)
-    print(response.json())
+    response = requests.get(base_url + api, headers=token, verify=VERIFY_TLS)
+    # Do not log the response body: connection objects include DB passwords.
+    logger.info("List connections status: %s", response.status_code)
     return response.json()
 
 
@@ -132,15 +147,6 @@ def create_connection(base_url: str, token: str, secret: dict, dm_ruleset_id: st
                 'oracle_wallet': None}
                ]
     """
-    # if connection_id:
-    #     api = "api/connections/{}/".format(connection_id)
-    # else:
-    #     api = "api/connections/"
-    # response = requests.get(base_url + api, headers=token, verify=False)
-    # print(response)
-    # print(response.json())
-    # return response.json()
-    print(dict)
     keys_to_check = {
         "username",
         "password",
@@ -153,14 +159,15 @@ def create_connection(base_url: str, token: str, secret: dict, dm_ruleset_id: st
     if keys_to_check.issubset(secret):
         valid_engine_type = ["postgres", "mysql", "oracle", "mariadb", "mssql"]
         if secret["engine"] not in valid_engine_type:
-            print(
-                f"Invalid value for engine parameter in secret, valid values are: {valid_engine_type}"
+            logger.error(
+                "Invalid value for engine parameter in secret, valid values are: %s",
+                valid_engine_type,
             )
             return {
                 "status": "failure",
                 "error": f"Invalid value for engine parameter in secret, valid values are: {valid_engine_type}",
             }
-        print("All required parameters exist in the secret!")
+        logger.info("All required parameters exist in the secret.")
         api = "api/connections/"
         staging_db_id = secret["host"].split(".")
         staging_db_id[0] = f"{staging_db_id[0]}-datamasque"
@@ -189,11 +196,11 @@ def create_connection(base_url: str, token: str, secret: dict, dm_ruleset_id: st
         # test connection before creating it.
 
         test_response = requests.post(
-            base_url + api + "test/", json=conn_dict, headers=token, verify=False
+            base_url + api + "test/", json=conn_dict, headers=token, verify=VERIFY_TLS
         )
-        print(test_response)
+        logger.info("Connection test status: %s", test_response.status_code)
         if test_response.status_code in [200, 201]:
-            print("Db connection test successfull, creating DataMasque connection.")
+            logger.info("DB connection test successful, creating DataMasque connection.")
             get_conn_response = requests.get(
                 base_url + api,
                 json={
@@ -201,56 +208,58 @@ def create_connection(base_url: str, token: str, secret: dict, dm_ruleset_id: st
                     "name": f"database_{secret['dbname']}_datamasque_temp",
                 },
                 headers=token,
-                verify=False,
+                verify=VERIFY_TLS,
             )
             found = False
             for conn in get_conn_response.json():
                 if conn.get("name") == f"database_{secret['dbname']}_datamasque_temp":
                     found = True
-                    print(f"DataMasque Connecton exists: {conn}")
+                    # Do not log the connection object: it includes the DB password.
+                    logger.info("Existing temporary DataMasque connection found.")
                     break
             if found:
-                print(f"Deleting existing temporary connection: {conn['name']}")
+                logger.info("Deleting existing temporary connection: %s", conn["name"])
                 delete_response = requests.delete(
                     base_url + api + f"{conn['id']}/",
                     headers=token,
-                    verify=False,
+                    verify=VERIFY_TLS,
                 )
-                print(delete_response)
+                logger.info("Delete connection status: %s", delete_response.status_code)
             conn_response = requests.post(
-                base_url + api, json=conn_dict, headers=token, verify=False
+                base_url + api, json=conn_dict, headers=token, verify=VERIFY_TLS
             )
 
-            print(conn_response)
-            print(conn_response.json())
+            logger.info("Create connection status: %s", conn_response.status_code)
             if conn_response.status_code == 201:
 
                 create_run_response = create_run(
                     base_url, token, conn_response.json()["id"], dm_ruleset_id, run_secret
                 )
-                print(create_run_response)
                 return create_run_response
             else:
-                print(
-                    f"Unexpected status code: {conn_response.status_code} {conn_response.json()}"
+                logger.error(
+                    "Unexpected status code creating connection: %s",
+                    conn_response.status_code,
                 )
                 return {
                     "status": "failure",
                     "error": f"Unexpected status code: {conn_response.status_code} {conn_response.json()}",
                 }
         else:
-            print(
-                f"Connection test failed, please verify following connection parameters provided in secrets manager {json.dump(conn_dict)} ."
+            # Never log conn_dict: it contains the DB password.
+            logger.error(
+                "Connection test failed, please verify the connection parameters provided in secrets manager."
             )
             return {
                 "status": "failure",
-                "error": f"Connection test failed, please verify the connection parameters provided in secrets manager.",
+                "error": "Connection test failed, please verify the connection parameters provided in secrets manager.",
             }
 
     else:
-        print(
-            f"Missing required parameters in secrets manager, please verify \
-              if the secret contains {keys_to_check} parameters in it."
+        logger.error(
+            "Missing required parameters in secrets manager, please verify "
+            "the secret contains %s parameters.",
+            keys_to_check,
         )
         return {
             "status": "failure",
@@ -285,13 +294,13 @@ def get_secret(secret_name: str) -> Optional[Dict]:
             return None
 
     except client.exceptions.ResourceNotFoundException:
-        print(f"Error: The requested secret '{secret_name}' was not found")
+        logger.error("Error: The requested secret '%s' was not found", secret_name)
     except client.exceptions.InvalidRequestException as e:
-        print(f"Error: The request was invalid due to: {e}")
+        logger.error("Error: The request was invalid due to: %s", e)
     except client.exceptions.InvalidParameterException as e:
-        print(f"Error: The request had invalid params: {e}")
+        logger.error("Error: The request had invalid params: %s", e)
     except Exception as e:
-        print(f"An unexpected error occurred: {e}")
+        logger.error("An unexpected error occurred: %s", e)
 
     return None
 
@@ -327,9 +336,8 @@ def rulesets(base_url, token, ruleset_id=None):
         api = "api/rulesets/{}/".format(ruleset_id)
     else:
         api = "api/rulesets/"
-    response = requests.get(base_url + api, headers=token, verify=False)
-    print(response)
-    print(response.json())
+    response = requests.get(base_url + api, headers=token, verify=VERIFY_TLS)
+    logger.info("List rulesets status: %s", response.status_code)
     return response.json()
 
 
@@ -381,9 +389,9 @@ def create_run(base_url, token, conn_id, dm_ruleset_id, run_secret):
         },
     }
     api = "api/runs/"
-    response = requests.post(base_url + api, json=run_dict, headers=token, verify=False)
-    print(response)
-    print(response.json())
+    # run_dict carries the run_secret; never log the request body.
+    response = requests.post(base_url + api, json=run_dict, headers=token, verify=VERIFY_TLS)
+    logger.info("Create run status: %s", response.status_code)
     return response.json()
 
 
@@ -420,9 +428,18 @@ def resolve_run_secret(event, secrets_client):
     return secrets.token_urlsafe(32)
 
 
+def _redacted_event(event):
+    """Copy of the event with sensitive run-secret fields masked for logging."""
+    redacted = dict(event)
+    for key in ("RunSecret", "AwsSecretArn"):
+        if key in redacted:
+            redacted[key] = "***redacted***"
+    return redacted
+
+
 def lambda_handler(event, context):
 
-    print(json.dumps(event))
+    logger.info("Event: %s", json.dumps(_redacted_event(event)))
 
     client = boto3.client("secretsmanager")
 
@@ -454,22 +471,12 @@ def lambda_handler(event, context):
             else:
                 event["MaskRunStatus"] = create_connection_response["status"]
                 event["MaskRunId"] = create_connection_response["id"]
-        print(json.dumps(event))
+        logger.info("Result event: %s", json.dumps(_redacted_event(event)))
         return event
 
     except Exception as e:
-        print(f"Error executing datamasque run: {e}")
+        logger.error("Error executing datamasque run: %s", e)
         event["MaskRunStatus"] = "failure"
         event["Error"] = f"Error executing datamasque run: {e}"
-        print(json.dumps(event))
+        logger.info("Result event: %s", json.dumps(_redacted_event(event)))
         return event
-
-        # if response:
-        #     run_id = response["id"]
-        #     conn_id = create_connection_response["id"]
-
-        #     return {
-        #         "run_id": run_id,
-        #         "DBInstanceIdentifier": DBInstanceIdentifier,
-        #         "conn_id": conn_id,
-        #     }

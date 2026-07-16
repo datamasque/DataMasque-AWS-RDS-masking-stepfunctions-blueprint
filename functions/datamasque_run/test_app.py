@@ -15,7 +15,13 @@ os.environ.setdefault("DATAMASQUE_BASE_URL", "http://localhost:8080/")
 os.environ.setdefault("DATAMASQUE_SECRET_ARN", "arn:aws:secretsmanager:us-east-1:111111111111:secret:fake-AbCdEf")
 os.environ.setdefault("AWS_DEFAULT_REGION", "us-east-1")
 
-from app import RunSecretError, resolve_run_secret
+import app
+from app import (
+    RunSecretError,
+    create_connection,
+    parse_verify_tls,
+    resolve_run_secret,
+)
 
 
 @pytest.fixture
@@ -100,3 +106,90 @@ def test_runsecret_wins_over_awssecretarn(secrets_client):
 
     assert resolve_run_secret(event, secrets_client) == "literal-wins"
     secrets_client.get_secret_value.assert_not_called()
+
+
+# --- TLS verification flag parsing ---------------------------------------
+
+
+@pytest.mark.parametrize("value", ["false", "False", "FALSE", "0", "no", " no ", "No"])
+def test_parse_verify_tls_disables_only_on_explicit_falsey(value):
+    assert parse_verify_tls(value) is False
+
+
+@pytest.mark.parametrize("value", ["true", "True", "1", "yes", "", "anything", None])
+def test_parse_verify_tls_defaults_secure(value):
+    # Anything that is not an explicit false/0/no keeps verification ON.
+    assert parse_verify_tls(value) is True
+
+
+# --- create_connection guards and endpoint derivation --------------------
+
+
+def _valid_secret(**overrides):
+    secret = {
+        "username": "appuser",
+        "password": "s3cr3t",
+        "engine": "postgres",
+        "host": "mydb.cluster-abc.ap-southeast-2.rds.amazonaws.com",
+        "port": "5432",
+        "dbname": "appdb",
+        "schema": "public",
+    }
+    secret.update(overrides)
+    return secret
+
+
+class _FakeResponse:
+    def __init__(self, status_code, payload=None):
+        self.status_code = status_code
+        self._payload = payload if payload is not None else {}
+
+    def json(self):
+        return self._payload
+
+
+def test_create_connection_rejects_missing_required_keys():
+    secret = _valid_secret()
+    del secret["schema"]
+
+    result = create_connection("http://dm/", {}, secret, "ruleset-id", "rs")
+
+    assert result["status"] == "failure"
+    assert "Missing required parameters" in result["error"]
+
+
+def test_create_connection_rejects_invalid_engine():
+    secret = _valid_secret(engine="db2")
+
+    result = create_connection("http://dm/", {}, secret, "ruleset-id", "rs")
+
+    assert result["status"] == "failure"
+    assert "Invalid value for engine" in result["error"]
+
+
+def test_create_connection_derives_staging_endpoint(monkeypatch):
+    """First host label gets the -datamasque suffix; the rest is preserved."""
+    captured = {}
+
+    def fake_post(url, json=None, headers=None, verify=None):
+        # The connection-test call is the first POST and carries conn_dict.
+        if url.endswith("/test/"):
+            captured["conn_dict"] = json
+            captured["verify"] = verify
+            return _FakeResponse(400)  # short-circuit after capturing
+        return _FakeResponse(400)
+
+    monkeypatch.setattr(app.requests, "post", fake_post)
+
+    result = create_connection(
+        "http://dm/", {"Authorization": "Token x"}, _valid_secret(), "ruleset-id", "rs"
+    )
+
+    conn = captured["conn_dict"]
+    assert conn["host"] == "mydb-datamasque.cluster-abc.ap-southeast-2.rds.amazonaws.com"
+    assert conn["port"] == 5432  # cast to int
+    assert conn["db_type"] == "postgres"
+    # TLS verification flag is threaded through to requests.
+    assert captured["verify"] is app.VERIFY_TLS
+    # Connection test failed (400) -> failure result, no connection created.
+    assert result["status"] == "failure"

@@ -46,9 +46,16 @@ def lambda_handler(event, context):
                         "DBClusterIdentifier": event["parameters"][
                             "DBInstanceIdentifier"
                         ],
-                        "AvailabilityZone": event["PreferredAZ"],
                         "DBSubnetGroupName": event["parameters"]["DBSubnetGroupName"],
                     }
+                    # PreferredAZ is optional: describe_db_instances resolved it
+                    # into parameters.AvailabilityZone (None for Aurora when not
+                    # supplied). Only pin the AZ when one is known.
+                    az = event["parameters"].get("AvailabilityZone") or event.get(
+                        "PreferredAZ"
+                    )
+                    if az:
+                        instance_params["AvailabilityZone"] = az
                     if event["parameters"].get("DBParameterGroupName"):
                         instance_params["DBParameterGroupName"] = event["parameters"][
                             "DBParameterGroupName"

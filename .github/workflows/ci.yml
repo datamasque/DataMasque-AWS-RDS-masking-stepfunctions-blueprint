@@ -1,0 +1,27 @@
+name: ci
+on:
+  push: { branches: ["**"] }
+  pull_request:
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - run: pip install cfn-lint aws-sam-cli
+      - name: cfn-lint templates
+        run: cfn-lint $(git ls-files '*.yml' '*.yaml' '*.template' | grep -iE 'template|\.template' || true)
+      - name: sam validate
+        run: if [ -f template.yaml ] || [ -f template.yml ]; then sam validate --lint; fi
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - name: install deps
+        run: |
+          pip install pytest boto3   # boto3 is provided by the Lambda runtime, not pinned in requirements
+          find . -name 'requirements*.txt' -exec pip install -r {} \; || true
+      - run: pytest -q || [ $? -eq 5 ]   # exit 5 = no tests collected, tolerate

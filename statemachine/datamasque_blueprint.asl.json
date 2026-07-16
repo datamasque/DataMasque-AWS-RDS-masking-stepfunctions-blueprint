@@ -54,7 +54,7 @@
         {
           "Variable": "$.status",
           "StringMatches": "fail*",
-          "Next": "FailState"
+          "Next": "CleanupOnFailure"
         }
       ],
       "Default": "WaitBeforeRetry"
@@ -78,7 +78,7 @@
           "ErrorEquals": [
             "States.TaskFailed"
           ],
-          "Next": "FailState"
+          "Next": "CleanupOnFailure"
         }
       ]
     },
@@ -93,7 +93,7 @@
         {
           "Variable": "$.MaskRunStatus",
           "StringMatches": "fail*",
-          "Next": "FailState"
+          "Next": "CleanupOnFailure"
         }
       ],
       "Default": "MaskingRunInProgress"
@@ -124,7 +124,7 @@
         {
           "Variable": "$.MaskedSnapshotStatus",
           "StringEquals": "failed",
-          "Next": "FailState"
+          "Next": "CleanupOnFailure"
         }
       ],
       "Default": "WaitforMaskedSnapshot"
@@ -152,7 +152,8 @@
           "StringEquals": "RDS",
           "Next": "DeleteStgRDS"
         }
-      ]
+      ],
+      "Default": "OutputMaskedSnapshot"
     },
     "DeleteStgClusterInstance": {
       "Type": "Task",
@@ -161,16 +162,39 @@
         "DbInstanceIdentifier.$": "$.StgDbInstanceId",
         "SkipFinalSnapshot": true
       },
+      "Retry": [
+        {
+          "ErrorEquals": [
+            "Rds.RdsException",
+            "States.Timeout"
+          ],
+          "IntervalSeconds": 15,
+          "MaxAttempts": 5,
+          "BackoffRate": 2
+        }
+      ],
       "Next": "DeleteStgCluster",
       "Resource": "arn:aws:states:::aws-sdk:rds:deleteDBInstance"
     },
     "DeleteStgCluster": {
+      "Comment": "ponytail: aws-sdk:rds integrations are request-response only and cannot take .sync, so a Retry on InvalidDBClusterStateFault handles the race where the cluster member is still deleting.",
       "Type": "Task",
       "ResultPath": null,
       "Parameters": {
         "DbClusterIdentifier.$": "$.StageDB",
         "SkipFinalSnapshot": true
       },
+      "Retry": [
+        {
+          "ErrorEquals": [
+            "Rds.InvalidDbClusterStateException",
+            "Rds.RdsException"
+          ],
+          "IntervalSeconds": 30,
+          "MaxAttempts": 10,
+          "BackoffRate": 1.5
+        }
+      ],
       "Next": "OutputMaskedSnapshot",
       "Resource": "arn:aws:states:::aws-sdk:rds:deleteDBCluster"
     },
@@ -181,6 +205,17 @@
         "DbInstanceIdentifier.$": "$.StageDB",
         "SkipFinalSnapshot": true
       },
+      "Retry": [
+        {
+          "ErrorEquals": [
+            "Rds.RdsException",
+            "States.Timeout"
+          ],
+          "IntervalSeconds": 15,
+          "MaxAttempts": 5,
+          "BackoffRate": 2
+        }
+      ],
       "Next": "OutputMaskedSnapshot",
       "Resource": "arn:aws:states:::aws-sdk:rds:deleteDBInstance"
     },
@@ -188,6 +223,131 @@
       "Type": "Pass",
       "OutputPath": "$.MaskedDBSnapshotIdentifier",
       "End": true
+    },
+    "CleanupOnFailure": {
+      "Comment": "Tear down the staging clone on any failure so no unmasked production clone is left running. Routes by DBType; unknown/absent type falls through to FailState. Each delete catches errors (e.g. clone never created) and still reaches FailState.",
+      "Type": "Choice",
+      "Choices": [
+        {
+          "And": [
+            {
+              "Variable": "$.DBType",
+              "IsPresent": true
+            },
+            {
+              "Variable": "$.DBType",
+              "StringEquals": "Aurora"
+            }
+          ],
+          "Next": "CleanupStgClusterInstance"
+        },
+        {
+          "And": [
+            {
+              "Variable": "$.DBType",
+              "IsPresent": true
+            },
+            {
+              "Variable": "$.DBType",
+              "StringEquals": "RDS"
+            }
+          ],
+          "Next": "CleanupStgRDS"
+        }
+      ],
+      "Default": "FailState"
+    },
+    "CleanupStgClusterInstance": {
+      "Comment": "Retry transient RDS throttling before giving up: Retry runs before Catch, so a throttled delete is retried, and only a persistent error (e.g. clone never created) falls through to still tear down the cluster.",
+      "Type": "Task",
+      "ResultPath": null,
+      "Parameters": {
+        "DbInstanceIdentifier.$": "$.StgDbInstanceId",
+        "SkipFinalSnapshot": true
+      },
+      "Retry": [
+        {
+          "ErrorEquals": [
+            "Rds.RdsException",
+            "States.Timeout"
+          ],
+          "IntervalSeconds": 15,
+          "MaxAttempts": 5,
+          "BackoffRate": 2
+        }
+      ],
+      "Next": "CleanupStgCluster",
+      "Resource": "arn:aws:states:::aws-sdk:rds:deleteDBInstance",
+      "Catch": [
+        {
+          "ErrorEquals": [
+            "States.ALL"
+          ],
+          "ResultPath": null,
+          "Next": "CleanupStgCluster"
+        }
+      ]
+    },
+    "CleanupStgCluster": {
+      "Comment": "Same InvalidDbClusterStateException race as DeleteStgCluster: the just-deleted member may still be deleting. Retry before Catch so the cluster is actually torn down rather than orphaned on the failure path.",
+      "Type": "Task",
+      "ResultPath": null,
+      "Parameters": {
+        "DbClusterIdentifier.$": "$.StageDB",
+        "SkipFinalSnapshot": true
+      },
+      "Retry": [
+        {
+          "ErrorEquals": [
+            "Rds.InvalidDbClusterStateException",
+            "Rds.RdsException"
+          ],
+          "IntervalSeconds": 30,
+          "MaxAttempts": 10,
+          "BackoffRate": 1.5
+        }
+      ],
+      "Next": "FailState",
+      "Resource": "arn:aws:states:::aws-sdk:rds:deleteDBCluster",
+      "Catch": [
+        {
+          "ErrorEquals": [
+            "States.ALL"
+          ],
+          "ResultPath": null,
+          "Next": "FailState"
+        }
+      ]
+    },
+    "CleanupStgRDS": {
+      "Type": "Task",
+      "ResultPath": null,
+      "Parameters": {
+        "DbInstanceIdentifier.$": "$.StageDB",
+        "SkipFinalSnapshot": true
+      },
+      "Retry": [
+        {
+          "ErrorEquals": [
+            "Rds.RdsException",
+            "States.Timeout"
+          ],
+          "IntervalSeconds": 15,
+          "MaxAttempts": 5,
+          "BackoffRate": 2
+        }
+      ],
+      "Next": "FailState",
+      "Resource": "arn:aws:states:::aws-sdk:rds:deleteDBInstance",
+      "Catch": [
+        {
+          "ErrorEquals": [
+            "States.ALL"
+          ],
+          "ResultPath": null,
+          "Next": "FailState"
+        }
+      ]
     }
   }
 }

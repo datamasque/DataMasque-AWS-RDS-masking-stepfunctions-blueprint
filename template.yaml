@@ -1,6 +1,16 @@
 AWSTemplateFormatVersion: "2010-09-09"
 Transform: AWS::Serverless-2016-10-31
 
+Globals:
+  Function:
+    Runtime: python3.12
+    Environment:
+      Variables:
+        # boto3 adaptive retries so RDS API throttling during polling loops is
+        # retried rather than failing the workflow and orphaning the staging clone.
+        AWS_RETRY_MODE: adaptive
+        AWS_MAX_ATTEMPTS: '10'
+
 Parameters:
   VpcId:
     Type: AWS::EC2::VPC::Id
@@ -17,6 +27,17 @@ Parameters:
   DataMasqueSecurityGroup:
     Type: String
     Description: Security Group ID for connectivity between Staged DB and DM instance.
+  DatamasqueVerifyTls:
+    Type: String
+    Default: 'true'
+    AllowedValues:
+      - 'true'
+      - 'false'
+    Description: >
+      Whether the Lambdas verify the DataMasque API TLS certificate. Defaults to
+      'true'. Set to 'false' only for a documented self-signed / private-CA
+      DataMasque instance on a trusted network path (removes MITM protection for
+      traffic carrying credentials and run secrets).
   AllowedRunSecretArnPattern:
     Type: String
     Default: 'datamasque/*run-secret*'
@@ -41,8 +62,7 @@ Resources:
     Properties:
       CodeUri: functions/datamasque_run/
       Handler: app.lambda_handler
-      Runtime: python3.9
-      Timeout: 10
+      Timeout: 60
       Architectures:
         - x86_64
       Policies:
@@ -65,13 +85,13 @@ Resources:
         Variables:
           DATAMASQUE_BASE_URL: !Ref DatamasqueBaseUrl
           DATAMASQUE_SECRET_ARN: !Ref DatamasqueSecretArn
+          DATAMASQUE_VERIFY_TLS: !Ref DatamasqueVerifyTls
 
   DescribeDBInstances:
     Type: AWS::Serverless::Function # More info about Function Resource: https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/sam-resource-function.html
     Properties:
       CodeUri: functions/describe_db_instances/
       Handler: app.lambda_handler
-      Runtime: python3.9
       Timeout: 10
       Architectures:
         - x86_64
@@ -83,7 +103,6 @@ Resources:
     Properties:
       CodeUri: functions/describe_db_snapshots/
       Handler: app.lambda_handler
-      Runtime: python3.9
       Timeout: 10
       Architectures:
         - x86_64
@@ -102,7 +121,6 @@ Resources:
     Properties:
       CodeUri: functions/restore_db_instance_from_db_snapshot/
       Handler: app.lambda_handler
-      Runtime: python3.9
       Timeout: 10
       Environment:
         Variables:
@@ -125,7 +143,6 @@ Resources:
     Properties:
       CodeUri: functions/check_db_availability/
       Handler: app.lambda_handler
-      Runtime: python3.9
       Timeout: 10
       Architectures:
         - x86_64
@@ -146,7 +163,6 @@ Resources:
     Properties:
       CodeUri: functions/create_masked_snapshot/
       Handler: app.lambda_handler
-      Runtime: python3.9
       Timeout: 60
       Architectures:
         - x86_64
@@ -164,7 +180,6 @@ Resources:
     Properties:
       CodeUri: functions/check_masked_snapshot/
       Handler: app.lambda_handler
-      Runtime: python3.9
       Timeout: 60
       Architectures:
         - x86_64
@@ -176,7 +191,6 @@ Resources:
     Properties:
       CodeUri: functions/check_masking_run/
       Handler: app.lambda_handler
-      Runtime: python3.9
       Timeout: 20
       Architectures:
         - x86_64
@@ -193,6 +207,7 @@ Resources:
         Variables:
           DATAMASQUE_BASE_URL: !Ref DatamasqueBaseUrl
           DATAMASQUE_SECRET_ARN: !Ref DatamasqueSecretArn
+          DATAMASQUE_VERIFY_TLS: !Ref DatamasqueVerifyTls
 
   DatamasqueBlueprintStateMachine:
     Type: AWS::Serverless::StateMachine # More info about State Machine Resource: https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/sam-resource-statemachine.html
@@ -247,7 +262,7 @@ Resources:
             Description: Schedule to run the DATAMASQUE state machine weekly
             Enabled: False
             Schedule: "rate(7 days)"
-            Input: '{
+            Input: !Sub '{
               "DBInstanceIdentifier": "demo-oracle-datamasque-03-rds",
               "DBSecretIdentifier": "arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:datamasque/demo/oracle_connections-TpvoiO",
               "DataMasqueRulesetId": "4f115c49-43bb-4cbc-a5b8-55a5aa9509e0",
