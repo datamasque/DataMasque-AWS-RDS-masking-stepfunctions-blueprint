@@ -10,6 +10,11 @@ Globals:
         # retried rather than failing the workflow and orphaning the staging clone.
         AWS_RETRY_MODE: adaptive
         AWS_MAX_ATTEMPTS: '10'
+        # Stamps the PRM identifier onto the User-Agent of every AWS API call the
+        # Lambdas make, so calls are attributed even on resources that cannot be tagged.
+        AWS_SDK_UA_APP_ID: !Ref PRMTagValue
+    Tags:
+      aws-apn-id: !Ref PRMTagValue
 
 Parameters:
   VpcId:
@@ -48,6 +53,15 @@ Parameters:
       and region. Use '*' to permit any secret in the account (not
       recommended). Cross-account access also requires a resource policy
       on the source secret.
+  PRMTagValue:
+    Type: String
+    Default: 'pc:dp9c56sw1n8t10q5s4pxlgl3x'
+    Description: >
+      AWS Partner Revenue Measurement (PRM) attribution tag value, in the form
+      'pc:<marketplace-product-code>'. Applied as the 'aws-apn-id' tag to the
+      resources this stack provisions and to the staging database, from where
+      CopyTagsToSnapshot carries it onto the masked snapshot and every database
+      restored from it. Defaults to the DataMasque product code.
 
 Resources:
   DatamasqueRunSg:
@@ -56,6 +70,9 @@ Resources:
       GroupDescription: DATAMASQUE blueprint API run Lambda security group
       VpcId:
         Ref: VpcId
+      Tags:
+        - Key: aws-apn-id
+          Value: !Ref PRMTagValue
 
   DatamasqueRun:
     Type: AWS::Serverless::Function
@@ -209,9 +226,32 @@ Resources:
           DATAMASQUE_SECRET_ARN: !Ref DatamasqueSecretArn
           DATAMASQUE_VERIFY_TLS: !Ref DatamasqueVerifyTls
 
+  ApplyPRMTags:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: functions/apply_prm_tags/
+      Handler: app.lambda_handler
+      Timeout: 30
+      Architectures:
+        - x86_64
+      Policies:
+        - AmazonRDSReadOnlyAccess
+        - Statement:
+            - Action:
+                - rds:AddTagsToResource
+                - rds:ModifyDBInstance
+                - rds:ModifyDBCluster
+              Effect: Allow
+              Resource: "*"
+      Environment:
+        Variables:
+          PRM_TAG_VALUE: !Ref PRMTagValue
+
   DatamasqueBlueprintStateMachine:
     Type: AWS::Serverless::StateMachine # More info about State Machine Resource: https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/sam-resource-statemachine.html
     Properties:
+      Tags:
+        aws-apn-id: !Ref PRMTagValue
       DefinitionUri: statemachine/datamasque_blueprint.asl.json
       DefinitionSubstitutions:
         DatamasqueRunFunctionArn: !GetAtt DatamasqueRun.Arn
@@ -222,6 +262,7 @@ Resources:
         CheckMaskingRunStatus: !GetAtt CheckMaskingRunStatus.Arn
         CreateMaskedSnapshot: !GetAtt CreateMaskedSnapshot.Arn
         CheckMaskedSnapshot: !GetAtt CheckMaskedSnapshot.Arn
+        ApplyPRMTagsFunctionArn: !GetAtt ApplyPRMTags.Arn
       Policies:
         - LambdaInvokePolicy:
             FunctionName: !Ref DescribeDBInstances
@@ -239,6 +280,8 @@ Resources:
             FunctionName: !Ref CreateMaskedSnapshot
         - LambdaInvokePolicy:
             FunctionName: !Ref CheckMaskedSnapshot
+        - LambdaInvokePolicy:
+            FunctionName: !Ref ApplyPRMTags
         - Statement:
             - Action:
                 - rds:DeleteDBInstance

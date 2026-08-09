@@ -111,6 +111,21 @@
     "ApplyPRMTags": {
       "Type": "Task",
       "Resource": "${ApplyPRMTagsFunctionArn}",
+      "Retry": [
+        {
+          "ErrorEquals": ["States.TaskFailed"],
+          "IntervalSeconds": 5,
+          "MaxAttempts": 3,
+          "BackoffRate": 2
+        }
+      ],
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "ResultPath": "$.PRMTagError",
+          "Next": "CreateDBSnapshot"
+        }
+      ],
       "Next": "CreateDBSnapshot"
     },
     "CreateDBSnapshot": {
