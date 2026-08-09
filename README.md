@@ -43,7 +43,7 @@ Please refer to [DataMasque AWS Service Catalog Template](https://github.com/dat
 
 The CloudFormation template deploys the following AWS resources:
 - An AWS Step Functions workflow.
-- Eight AWS Lambda functions.
+- Nine AWS Lambda functions.
 - IAM roles for the Step Functions workflow and Lambda functions.
 
 The Step Functions workflow orchestrates tasks by invoking AWS Lambda functions and DataMasque masking APIs. It irreversibly replaces sensitive data, such as PII, PCI, and PHI, with realistic, functional, and consistent masked values based on rulesets provided for the masking run.
@@ -227,6 +227,7 @@ Make sure you have created a secret with the following keys and values:
 | DatamasqueSecretArn        | Secret with DataMasque instance credentials.                                                                                                                                                                                                                    |
 | DataMasqueSecurityGroup    | The Security Group ID that allows the DataMasque instance to connect to RDS.                                                                                                                                                                                   |
 | AllowedRunSecretArnPattern | Secret-name pattern (after `secret:` in the ARN) the DatamasqueRun Lambda may read for the optional `AwsSecretArn` input. Defaults to `datamasque/*run-secret*` in the deploying account/region. Use `*` to permit any secret in the account (not recommended). |
+| PRMTagValue                | AWS Partner Revenue Measurement attribution tag value, as `pc:<marketplace-product-code>`. Defaults to the DataMasque product code, so no input is needed for a standard deployment. Applied as the `aws-apn-id` tag to the resources this stack provisions and to the staging database. |
 |
 
 ###### Follow the steps to deploy the CloudFormation Stack:
@@ -340,6 +341,7 @@ The following table describes the states and details of the step function defini
 | IsMaskRunComplete             | Choice step to check the status of the masking run.                                        |
 | MaskingRunInProgress          | Wait step of 60 seconds before checking the masking run status again.                      |
 | CheckMaskingRunStatus         | Step to check the status of the masking run.                                               |
+| ApplyPRMTags                  | Applies the `aws-apn-id` attribution tag to the staging database and enables `CopyTagsToSnapshot`, so the tag reaches the masked snapshot and everything restored from it. Retried three times, then skipped, so a tagging failure cannot discard a completed masking run. |
 | CreateDBSnapshot              | Step to create a snapshot of the masked staging database.                                  |
 | CheckMaskedSnapshotStatus     | Choice step to check the status of the masked snapshot.                                    |
 | WaitforMaskedSnapshot         | Wait step of 60 seconds before checking the status of the masked snapshot.                 |
