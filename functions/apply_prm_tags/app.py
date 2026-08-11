@@ -3,7 +3,7 @@ import os
 import boto3
 
 PRM_TAG_KEY = "aws-apn-id"
-PRM_TAG_VALUE = os.environ.get("PRM_TAG_VALUE", "pc:dp9c56sw1n8t10q5s4pxlgl3x")
+PRM_TAG_VALUE = os.environ["PRM_TAG_VALUE"]
 
 
 def lambda_handler(event, context):
@@ -30,17 +30,20 @@ def lambda_handler(event, context):
 
     # Tags are only inherited by a snapshot when the source has
     # CopyTagsToSnapshot enabled, which is off by default on a restored clone.
+    #
+    # No `ApplyImmediately`: CopyTagsToSnapshot takes effect on its own, while
+    # the flag would also force any other pending modification to apply now.
+    # That can put the instance into `modifying`, which fails the
+    # `CreateDBSnapshot` that follows and tears down a completed masking run.
     if DBType == "RDS":
         client.modify_db_instance(
             DBInstanceIdentifier=DBId,
             CopyTagsToSnapshot=True,
-            ApplyImmediately=True,
         )
     else:
         client.modify_db_cluster(
             DBClusterIdentifier=DBId,
             CopyTagsToSnapshot=True,
-            ApplyImmediately=True,
         )
     print(f"Enabled CopyTagsToSnapshot on {DBId}")
 

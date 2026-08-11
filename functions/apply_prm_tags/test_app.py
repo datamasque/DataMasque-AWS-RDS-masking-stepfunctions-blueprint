@@ -65,6 +65,18 @@ def test_rds_instance_is_tagged_and_copies_tags_to_snapshot(fake_client):
     assert event["PRMTagApplied"] is True
 
 
+@pytest.mark.parametrize(
+    "DBType,call", [("RDS", "modify_db_instance"), ("Aurora", "modify_db_cluster")]
+)
+def test_modify_never_applies_immediately(fake_client, DBType, call):
+    """`ApplyImmediately` would force unrelated pending modifications to apply
+    now, and an instance in `modifying` fails the `CreateDBSnapshot` that
+    follows, which routes the workflow to `CleanupOnFailure`."""
+    lambda_handler({"StageDB": "source-datamasque", "DBType": DBType}, None)
+
+    assert "ApplyImmediately" not in fake_client.calls[call]
+
+
 def test_aurora_cluster_is_tagged_and_copies_tags_to_snapshot(fake_client):
     event = lambda_handler(
         {"StageDB": "source-aurora-datamasque", "DBType": "Aurora"}, None

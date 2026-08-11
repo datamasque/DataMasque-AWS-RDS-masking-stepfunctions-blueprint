@@ -342,6 +342,7 @@ The following table describes the states and details of the step function defini
 | MaskingRunInProgress          | Wait step of 60 seconds before checking the masking run status again.                      |
 | CheckMaskingRunStatus         | Step to check the status of the masking run.                                               |
 | ApplyPRMTags                  | Applies the `aws-apn-id` attribution tag to the staging database and enables `CopyTagsToSnapshot`, so the tag reaches the masked snapshot and everything restored from it. Retried three times, then skipped, so a tagging failure cannot discard a completed masking run. |
+| PRMTaggingSkipped             | Reached only when tagging failed every retry. Marks in the execution graph that the masked snapshot ships unattributed. Alarm on the `ApplyPRMTags` Lambda's CloudWatch `Errors` metric to be notified, as the final execution output carries only the snapshot identifier. |
 | CreateDBSnapshot              | Step to create a snapshot of the masked staging database.                                  |
 | CheckMaskedSnapshotStatus     | Choice step to check the status of the masked snapshot.                                    |
 | WaitforMaskedSnapshot         | Wait step of 60 seconds before checking the status of the masked snapshot.                 |

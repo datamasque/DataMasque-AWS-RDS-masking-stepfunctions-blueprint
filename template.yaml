@@ -236,13 +236,23 @@ Resources:
         - x86_64
       Policies:
         - AmazonRDSReadOnlyAccess
+        # Scoped to the staging clones this workflow creates, matching the
+        # naming the state machine's delete grants already rely on.
+        # `rds:ModifyDBInstance` on "*" would let this Lambda reconfigure every
+        # database in the account, master password included.
         - Statement:
             - Action:
                 - rds:AddTagsToResource
                 - rds:ModifyDBInstance
+              Effect: Allow
+              Resource:
+                - !Sub "arn:aws:rds:${AWS::Region}:${AWS::AccountId}:db:*-datamasque"
+                - !Sub "arn:aws:rds:${AWS::Region}:${AWS::AccountId}:db:*-datamasque-1"
+            - Action:
+                - rds:AddTagsToResource
                 - rds:ModifyDBCluster
               Effect: Allow
-              Resource: "*"
+              Resource: !Sub "arn:aws:rds:${AWS::Region}:${AWS::AccountId}:cluster:*-datamasque"
       Environment:
         Variables:
           PRM_TAG_VALUE: !Ref PRMTagValue

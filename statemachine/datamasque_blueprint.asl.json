@@ -123,9 +123,16 @@
         {
           "ErrorEquals": ["States.ALL"],
           "ResultPath": "$.PRMTagError",
-          "Next": "CreateDBSnapshot"
+          "Next": "PRMTaggingSkipped"
         }
       ],
+      "Next": "CreateDBSnapshot"
+    },
+    "PRMTaggingSkipped": {
+      "Comment": "Reached only when tagging failed every retry. The masking run is kept, so this state is the marker in the execution graph that the masked snapshot ships unattributed. Alarm on the ApplyPRMTags Lambda's CloudWatch Errors metric to be told about it.",
+      "Type": "Pass",
+      "Result": false,
+      "ResultPath": "$.PRMTagApplied",
       "Next": "CreateDBSnapshot"
     },
     "CreateDBSnapshot": {
