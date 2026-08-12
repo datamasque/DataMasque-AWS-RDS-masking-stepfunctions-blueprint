@@ -1,6 +1,11 @@
 import json
+import os
 
 import boto3
+
+# The Aurora cluster member is created here rather than by the restore call,
+# so it needs the attribution tag applied at its own create site.
+PRM_TAGS = [{"Key": "aws-apn-id", "Value": os.environ["PRM_TAG_VALUE"]}]
 
 
 def lambda_handler(event, context):
@@ -47,6 +52,7 @@ def lambda_handler(event, context):
                             "DBInstanceIdentifier"
                         ],
                         "DBSubnetGroupName": event["parameters"]["DBSubnetGroupName"],
+                        "Tags": PRM_TAGS,
                     }
                     # PreferredAZ is optional: describe_db_instances resolved it
                     # into parameters.AvailabilityZone (None for Aurora when not

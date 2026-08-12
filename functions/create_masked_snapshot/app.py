@@ -1,7 +1,14 @@
+import os
 import secrets
 from datetime import datetime
 
 import boto3
+
+# Tagging at creation is atomic with the create call:
+# there is no window in which an untagged snapshot exists,
+# and a tagging failure fails the create,
+# so an unattributed snapshot cannot ship unnoticed.
+PRM_TAGS = [{"Key": "aws-apn-id", "Value": os.environ["PRM_TAG_VALUE"]}]
 
 
 def lambda_handler(event, context):
@@ -20,6 +27,7 @@ def lambda_handler(event, context):
             response = client.create_db_snapshot(
                 DBSnapshotIdentifier=f"{DBId}-masked-{current_date}",
                 DBInstanceIdentifier=DBId,
+                Tags=PRM_TAGS,
             )
             event["MaskedDBSnapshotIdentifier"] = response["DBSnapshot"][
                 "DBSnapshotIdentifier"
@@ -31,6 +39,7 @@ def lambda_handler(event, context):
             response = client.create_db_cluster_snapshot(
                 DBClusterSnapshotIdentifier=f"{DBId}-masked-{current_date}",
                 DBClusterIdentifier=DBId,
+                Tags=PRM_TAGS,
             )
             event["MaskedDBSnapshotIdentifier"] = response["DBClusterSnapshot"][
                 "DBClusterSnapshotIdentifier"
