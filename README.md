@@ -43,7 +43,7 @@ Please refer to [DataMasque AWS Service Catalog Template](https://github.com/dat
 
 The CloudFormation template deploys the following AWS resources:
 - An AWS Step Functions workflow.
-- Nine AWS Lambda functions.
+- Eight AWS Lambda functions.
 - IAM roles for the Step Functions workflow and Lambda functions.
 
 The Step Functions workflow orchestrates tasks by invoking AWS Lambda functions and DataMasque masking APIs. It irreversibly replaces sensitive data, such as PII, PCI, and PHI, with realistic, functional, and consistent masked values based on rulesets provided for the masking run.
