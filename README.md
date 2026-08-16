@@ -227,6 +227,7 @@ Make sure you have created a secret with the following keys and values:
 | DatamasqueSecretArn        | Secret with DataMasque instance credentials.                                                                                                                                                                                                                    |
 | DataMasqueSecurityGroup    | The Security Group ID that allows the DataMasque instance to connect to RDS.                                                                                                                                                                                   |
 | AllowedRunSecretArnPattern | Secret-name pattern (after `secret:` in the ARN) the DatamasqueRun Lambda may read for the optional `AwsSecretArn` input. Defaults to `datamasque/*run-secret*` in the deploying account/region. Use `*` to permit any secret in the account (not recommended). |
+| PRMTagValue                | AWS Partner Revenue Measurement attribution tag value, as `pc:<marketplace-product-code>`. Defaults to the DataMasque product code, so no input is needed for a standard deployment. Applied as the `aws-apn-id` tag to the resources this stack provisions, to the staging database, and to the masked snapshot, each at the point it is created. The product code on its own is also sent as the User-Agent app id, which is why the `pc:` prefix is required here: botocore rewrites `:` to `-` in a User-Agent, so the tag form cannot be reused verbatim there. |
 |
 
 ###### Follow the steps to deploy the CloudFormation Stack:
@@ -340,7 +341,7 @@ The following table describes the states and details of the step function defini
 | IsMaskRunComplete             | Choice step to check the status of the masking run.                                        |
 | MaskingRunInProgress          | Wait step of 60 seconds before checking the masking run status again.                      |
 | CheckMaskingRunStatus         | Step to check the status of the masking run.                                               |
-| CreateDBSnapshot              | Step to create a snapshot of the masked staging database.                                  |
+| CreateDBSnapshot              | Step to create a snapshot of the masked staging database, tagged `aws-apn-id` on creation. |
 | CheckMaskedSnapshotStatus     | Choice step to check the status of the masked snapshot.                                    |
 | WaitforMaskedSnapshot         | Wait step of 60 seconds before checking the status of the masked snapshot.                 |
 | DeleteStageDBChoice           | Choice step to decide whether to delete the cluster or instance based on the source database type. |

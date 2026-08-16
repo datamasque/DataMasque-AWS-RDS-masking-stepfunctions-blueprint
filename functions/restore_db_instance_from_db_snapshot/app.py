@@ -6,6 +6,12 @@ import boto3
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
+# The staging clone is the one chargeable resource that exists for the whole
+# masking window, so it carries the attribution tag from the moment it is
+# created. `CopyTagsToSnapshot` then carries the tag onto anything snapshotted
+# from it, without a later `ModifyDBInstance` call.
+PRM_TAGS = [{"Key": "aws-apn-id", "Value": os.environ["PRM_TAG_VALUE"]}]
+
 
 def lambda_handler(event, context):
 
@@ -25,6 +31,8 @@ def lambda_handler(event, context):
                 "DBSubnetGroupName": params["DBSubnetGroupName"],
                 "VpcSecurityGroupIds": [vpc_sg],
                 "DeletionProtection": params["DeletionProtection"],
+                "CopyTagsToSnapshot": True,
+                "Tags": PRM_TAGS,
             }
             # OptionGroupName / DBParameterGroupName are None when the source has
             # none; boto3 rejects None, so only pass them when present.
@@ -49,6 +57,8 @@ def lambda_handler(event, context):
                 DBSubnetGroupName=event["parameters"]["DBSubnetGroupName"],
                 VpcSecurityGroupIds=[vpc_sg],
                 DeletionProtection=False,
+                CopyTagsToSnapshot=True,
+                Tags=PRM_TAGS,
             )
             event["status"] = "success"
             event["StageDB"] = event["parameters"]["DBInstanceIdentifier"]
